@@ -1,8 +1,8 @@
-import settings
+from street_agitation_bot import bot_settings, models
 
 import re
 import collections
-from datetime import date, timedelta
+from datetime import datetime, date, timedelta
 from telegram import (ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardButton, InlineKeyboardMarkup)
 from telegram.ext import (Updater, CommandHandler, MessageHandler, Filters, RegexHandler,
                           ConversationHandler, CallbackQueryHandler)
@@ -111,6 +111,7 @@ def set_place_location(bot, update, user_data):
 
 
 def skip_place_location(bot, update, user_data):
+    user_data['location'] = None
     return _send_after_set_location(bot, update, user_data)
 
 
@@ -124,12 +125,47 @@ def set_event_dates(bot, update, user_data):
     return SET_TIME
 
 
+def _create_event_series(user_data):
+    if 'place_id' in user_data:
+        place = models.AgitationPlace.objects.get(id=user_data['place_id'])
+        del user_data['place_id']
+    else:
+        location = user_data['location']
+        place = models.AgitationPlace(
+            address=user_data['address'],
+            geo_latitude=location.latitude if location else None,
+            geo_longitude=location.longitude if location else None
+        )
+        place.save()
+        del user_data['address']
+        del user_data['location']
+
+    time_range = user_data['time_range']
+    from_seconds = (time_range[0] * 60 + time_range[1]) * 60
+    to_seconds = (time_range[2] * 60 + time_range[3]) * 60
+    if to_seconds < from_seconds:
+        to_seconds += 86400
+
+    for event_date in user_data['dates']:
+        # TODO timezone
+        event_datetime = datetime.combine(event_date, datetime.min.time())
+        models.AgitationEvent(
+            place=place,
+            start_date=event_datetime + timedelta(seconds=from_seconds),
+            end_date=event_datetime + timedelta(seconds=to_seconds),
+        ).save()
+
+    del user_data['dates']
+    del user_data['time_range']
+
+
 def set_event_time(bot, update, user_data):
     text = update.message.text
     match = re.match("([01]?[0-9]|2[0-3]):([0-5][0-9])\s*-\s*([01]?[0-9]|2[0-3]):([0-5][0-9])", text)
     if bool(match):
         user_data['time_range'] = list(map(int, match.groups()))
         update.message.reply_text(str(user_data), reply_markup=ReplyKeyboardRemove())
+        _create_event_series(user_data)
         return ConversationHandler.END
 
 
@@ -145,8 +181,8 @@ def error(bot, update, error):
     logger.warn('Update "%s" caused error "%s"' % (update, error))
 
 
-def main():
-    updater = Updater(settings.BOT_TOKEN)
+def run_bot():
+    updater = Updater(bot_settings.BOT_TOKEN)
 
     dp = updater.dispatcher
 
@@ -166,8 +202,8 @@ def main():
                            RegexHandler("^Вернуться к выбору дат$", back_to_select_dates, pass_user_data=True)],
             SET_TIME: [MessageHandler(Filters.text, set_event_time, pass_user_data=True)]
         },
-        fallbacks=[#CommandHandler('cancel', cancel),
-                   ]
+        fallbacks=[  # CommandHandler('cancel', cancel),
+        ]
     )
 
     dp.add_handler(CallbackQueryHandler(dates_keyboard_button, pass_user_data=True))
@@ -184,7 +220,3 @@ def main():
     # SIGTERM or SIGABRT. This should be used most of the time, since
     # start_polling() is non-blocking and will stop the bot gracefully.
     updater.idle()
-
-
-if __name__ == '__main__':
-    main()

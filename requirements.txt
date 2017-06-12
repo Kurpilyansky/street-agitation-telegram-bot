@@ -1,0 +1,4 @@
+
+python-telegram-bot
+Django==1.10.5
+django-reversion==2.0.8
