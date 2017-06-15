@@ -14,6 +14,8 @@ class AgitationPlace(models.Model):
     geo_latitude = models.FloatField(null=True, blank=True)
     geo_longitude = models.FloatField(null=True, blank=True)
 
+    last_update_time = models.DateTimeField(auto_now=True)
+
     def __str__(self):
         return self.address
 
@@ -22,3 +24,11 @@ class AgitationEvent(models.Model):
     place = models.ForeignKey(AgitationPlace)
     start_date = models.DateTimeField()
     end_date = models.DateTimeField()
+
+    class Meta:
+        ordering = ['start_date']
+
+    def show(self):
+        return "%s-%s, *%s*" % (self.start_date.strftime("%d.%m %H:%M"),
+                                self.end_date.strftime("%H:%M"),
+                                self.place.address)

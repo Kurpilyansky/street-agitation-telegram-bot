@@ -1,11 +1,14 @@
 from street_agitation_bot import bot_settings, models
 
+import operator
 import re
 import collections
 from datetime import datetime, date, timedelta
-from telegram import (ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardButton, InlineKeyboardMarkup)
+from telegram import (ReplyKeyboardMarkup, ReplyKeyboardRemove,
+                      InlineKeyboardButton, InlineKeyboardMarkup,
+                      InlineQueryResultArticle)
 from telegram.ext import (Updater, CommandHandler, MessageHandler, Filters, RegexHandler,
-                          ConversationHandler, CallbackQueryHandler)
+                          ConversationHandler, CallbackQueryHandler, InlineQueryHandler)
 import logging
 
 # Enable logging
@@ -15,31 +18,95 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 logger = logging.getLogger(__name__)
 
 (MENU,
- SET_EVENT_PLACE, CHOOSE_EVENT_PLACE, CREATE_EVENT_PLACE,
- SET_ADDRESS, SET_LOCATION, SELECT_DATES, SELECT_DATES_END, SET_TIME) = map(str, range(9))
+ SET_EVENT_PLACE, SELECT_EVENT_PLACE,
+ SET_ADDRESS, SET_LOCATION, SELECT_DATES, SELECT_DATES_END, SET_TIME) = map(str, range(8))
 
 
 def start(bot, update):
-    reply_markup = ReplyKeyboardMarkup([[u'Добавить ивент']], one_time_keyboard=True)
+    reply_markup = ReplyKeyboardMarkup([[u'Добавить ивент'], [u'Расписание']], one_time_keyboard=True)
     update.message.reply_text('Что сделать?', reply_markup=reply_markup)
     return MENU
+
+
+def show_schedule(bot, update):
+    events = list(models.AgitationEvent.objects.all())
+    print(events)
+    if events:
+        schedule_text = "\n".join(map(operator.methodcaller("show"), events))
+    else:
+        schedule_text = "В ближайшее время пока ничего не запланировано"
+    print(schedule_text)
+    update.message.reply_text(schedule_text, parse_mode="Markdown")
 
 
 def process_menu_command(bot, update):
     text = update.message.text
     if text == u'Добавить ивент':
-        reply_markup = ReplyKeyboardMarkup([[u'Выбрать место из старых'], [u'Создать новое место']],
-                                           one_time_keyboard=True)
+        return _send_set_event_place(bot, update)
+    elif text == u'Расписание':
+        show_schedule(bot, update)
+        return MENU
 
-        update.message.reply_text(text="Укажите место", reply_markup=reply_markup)
-        return SET_EVENT_PLACE
+
+def _send_set_event_place(bot, update):
+    reply_markup = ReplyKeyboardMarkup([[u'Выбрать место из старых'], [u'Создать новое место']],
+                                       one_time_keyboard=True)
+    update.message.reply_text(text="Укажите место", reply_markup=reply_markup)
+    return SET_EVENT_PLACE
 
 
-def set_event_place(bot, update):
+PLACE_PAGE_SIZE = 5
+
+
+def _send_select_event_place(bot, update, user_data):
+    offset = user_data["place_offset"]
+    places = models.AgitationPlace.objects.order_by('-last_update_time')[offset:offset+PLACE_PAGE_SIZE]
+    buttons = [["Назад"]] + list(map(lambda x: ["#%d. %s" % (x.id, x.address)], places))
+    if models.AgitationPlace.objects.count() > offset + PLACE_PAGE_SIZE:
+        buttons.append(["Вперед"])
+    reply_markup = ReplyKeyboardMarkup(buttons, one_time_keyboard=True)
+    update.message.reply_text("Выберите место", reply_markup=reply_markup)
+
+
+def set_event_place(bot, update, user_data):
     text = update.message.text
     if text == u'Создать новое место':
         update.message.reply_text(text="Введите адрес", reply_markup=ReplyKeyboardRemove())
         return SET_ADDRESS
+    elif text == u'Выбрать место из старых':
+        user_data["place_offset"] = 0
+        _send_select_event_place(bot, update, user_data)
+        return SELECT_EVENT_PLACE
+
+
+def select_event_place(bot, update, user_data):
+    text = update.message.text
+    if text == 'Назад':
+        if user_data['place_offset'] == 0:
+            return _send_set_event_place(bot, update)
+        else:
+            user_data['place_offset'] -= PLACE_PAGE_SIZE
+            _send_select_event_place(bot, update, user_data)
+    elif text == 'Вперед':
+        user_data['place_offset'] += PLACE_PAGE_SIZE
+        _send_select_event_place(bot, update, user_data)
+    else:
+        match = re.match('^#(\d+)\.', text)
+        if bool(match):
+            user_data['place_id'] = int(match.group(1))
+            _send_after_set_location(bot, update, user_data)
+            return SELECT_DATES
+
+
+# def select_event_place(bot, update, user_data):
+#     query = update.inline_query.query
+#     places = list(models.AgitationPlace.objects.filter(address__icontains=query)[:10])
+#     results = list()
+#     for place in places:
+#         results.append(InlineQueryResultArticle(id=place.id,
+#                                                 title=place.address,
+#                                                 input_message_content='#%d. %s' % (place.id, place.address)))
+#     update.inline_query.answer(results)
 
 
 def set_place_address(bot, update, user_data):
@@ -128,6 +195,7 @@ def set_event_dates(bot, update, user_data):
 def _create_event_series(user_data):
     if 'place_id' in user_data:
         place = models.AgitationPlace.objects.get(id=user_data['place_id'])
+        place.save()  # for update last_update_time
         del user_data['place_id']
     else:
         location = user_data['location']
@@ -194,7 +262,8 @@ def run_bot():
 
         states={
             MENU: [MessageHandler(Filters.text, process_menu_command)],
-            SET_EVENT_PLACE: [MessageHandler(Filters.text, set_event_place)],
+            SET_EVENT_PLACE: [MessageHandler(Filters.text, set_event_place, pass_user_data=True)],
+            SELECT_EVENT_PLACE: [MessageHandler(Filters.text, select_event_place, pass_user_data=True)],
             SET_ADDRESS: [MessageHandler(Filters.text, set_place_address, pass_user_data=True)],
             SET_LOCATION: [MessageHandler(Filters.location, set_place_location, pass_user_data=True),
                            CommandHandler("skip", skip_place_location, pass_user_data=True)],
@@ -207,6 +276,7 @@ def run_bot():
     )
 
     dp.add_handler(CallbackQueryHandler(dates_keyboard_button, pass_user_data=True))
+    # dp.add_handler(InlineQueryHandler(select_event_place, pass_user_data=True))
 
     dp.add_handler(conv_handler)
 
