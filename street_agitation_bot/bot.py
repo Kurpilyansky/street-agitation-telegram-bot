@@ -54,7 +54,7 @@ def show_menu(bot, update):
 
 
 def show_schedule(bot, update):
-    events = list(models.AgitationEvent.objects.all())
+    events = list(models.AgitationEvent.objects.filter(start_date__gte=date.today()))
     print(events)
     if events:
         schedule_text = "\n".join(map(operator.methodcaller("show"), events))
