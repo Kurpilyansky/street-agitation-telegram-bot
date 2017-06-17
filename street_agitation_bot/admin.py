@@ -33,5 +33,16 @@ class AgitationEventAdmin(VersionAdmin):
     )
 
 
+class ConversationStateAdmin(VersionAdmin):
+    list_display = (
+        'key',
+        'state',
+    )
+    list_filter = (
+        'state',
+    )
+
+
 admin.site.register(models.AgitationPlace, AgitationPlaceAdmin)
 admin.site.register(models.AgitationEvent, AgitationEventAdmin)
+admin.site.register(models.ConversationState, ConversationStateAdmin)

@@ -4,9 +4,9 @@ from django.db import models
 
 
 class Agitator(models.Model):
-    full_name = models.CharField(max_length=200)
-    phone = models.CharField(max_length=50)
-    telegram = models.CharField(max_length=100)
+    full_name = models.CharField(max_length=200, blank=False, null=False)
+    phone = models.CharField(max_length=50, blank=False, null=False)
+    telegram = models.CharField(max_length=100, blank=False, null=False)
 
 
 class AgitationPlace(models.Model):
@@ -22,8 +22,8 @@ class AgitationPlace(models.Model):
 
 class AgitationEvent(models.Model):
     place = models.ForeignKey(AgitationPlace)
-    start_date = models.DateTimeField()
-    end_date = models.DateTimeField()
+    start_date = models.DateTimeField(null=False)
+    end_date = models.DateTimeField(null=False)
 
     class Meta:
         ordering = ['start_date']
@@ -32,3 +32,18 @@ class AgitationEvent(models.Model):
         return "%s-%s, *%s*" % (self.start_date.strftime("%d.%m %H:%M"),
                                 self.end_date.strftime("%H:%M"),
                                 self.place.address)
+
+
+class ConversationState(models.Model):
+    key = models.CharField(max_length=400, blank=True, null=True, unique=True)
+    state = models.CharField(max_length=400, blank=True, null=True)
+    data = models.TextField(max_length=64000, blank=True, null=True)
+    last_update_time = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-last_update_time']
+
+    def __str__(self):
+        return "key '%s' state '%s' data '%s' last_update_time '%s'\n" % (
+            self.key, self.state, self.data, str(self.last_update_time)
+        )

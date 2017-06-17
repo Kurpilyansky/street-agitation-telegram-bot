@@ -18,12 +18,27 @@
 # along with this program.  If not, see [http://www.gnu.org/licenses/].
 """ This module contains the ConversationHandler """
 
+import json
 import logging
+
+from street_agitation_bot import models
 
 from telegram import Update
 from telegram.ext import (Handler, CallbackQueryHandler, InlineQueryHandler,
                           ChosenInlineResultHandler)
 from telegram.utils.promise import Promise
+
+import datetime
+
+
+def json_handler(self, obj):
+    if hasattr(obj, 'isoformat'):
+        return obj.isoformat()
+    else:
+        raise(TypeError, 'Object of type %s with value of %s is not JSON serializable' % (type(obj), repr(obj)))
+
+json.JSONEncoder.default = json_handler
+
 
 
 class EmptyHandler(Handler):
@@ -99,9 +114,7 @@ class ConversationHandler(Handler):
                  allow_reentry=False,
                  run_async_timeout=None,
                  timed_out_behavior=None,
-                 per_chat=True,
-                 per_user=True,
-                 per_message=False):
+                 per_user=True):
 
         self.entry_points = entry_points
         """:type: list[telegram.ext.Handler]"""
@@ -118,10 +131,10 @@ class ConversationHandler(Handler):
         self.timed_out_behavior = timed_out_behavior
         """:type: list[telegram.ext.Handler]"""
 
+        self._state_in_database = dict()
+        self._need_update_user_data = dict()
         self.conversations = dict()
         self.per_user = per_user
-        self.per_chat = per_chat
-        self.per_message = per_message
         """:type: dict[tuple: object]"""
 
         self.current_conversation = None
@@ -129,20 +142,17 @@ class ConversationHandler(Handler):
 
         self.logger = logging.getLogger(__name__)
 
-        if not any((self.per_user, self.per_chat, self.per_message)):
-            raise ValueError("'per_user', 'per_chat' and 'per_message' can't all be 'False'")
-
-        if self.per_message and not self.per_chat:
-            logging.warning("If 'per_message=True' is used, 'per_chat=True' should also be used, "
-                            "since message IDs are not globally unique.")
-
-        all_handlers = list()
-        all_handlers.extend(entry_points)
-        all_handlers.extend(fallbacks)
-
         for state_handlers in states.values():
-            all_handlers.extend(state_handlers)
+            for handler in state_handlers[1:]:
+                if isinstance(handler, EmptyHandler):
+                    logging.warning("EmptyHandler at non-first position will not be called")
 
+        # all_handlers = list()
+        # all_handlers.extend(entry_points)
+        # all_handlers.extend(fallbacks)
+        # for state_handlers in states.values():
+        #     all_handlers.extend(state_handlers)
+        #
         # if self.per_message:
         #     for handler in all_handlers:
         #         if not isinstance(handler, CallbackQueryHandler):
@@ -154,42 +164,29 @@ class ConversationHandler(Handler):
         #         if isinstance(handler, CallbackQueryHandler):
         #             logging.warning("If 'per_message=False', 'CallbackQueryHandler' will not be "
         #                             "tracked for every message.")
-
-        if self.per_chat:
-            for handler in all_handlers:
-                if isinstance(handler, (InlineQueryHandler, ChosenInlineResultHandler)):
-                    logging.warning("If 'per_chat=True', 'InlineQueryHandler' can not be used, "
-                                    "since inline queries have no chat context.")
+        #
+        # if self.per_chat:
+        #     for handler in all_handlers:
+        #         if isinstance(handler, (InlineQueryHandler, ChosenInlineResultHandler)):
+        #             logging.warning("If 'per_chat=True', 'InlineQueryHandler' can not be used, "
+        #                             "since inline queries have no chat context.")
 
     def _get_key(self, update):
-        chat = update.effective_chat
         user = update.effective_user
-
-        key = list()
-
-        if self.per_chat:
-            key.append(chat.id)
-
-        if self.per_user:
-            key.append(user.id)
-
-        if self.per_message:
-            key.append(update.callback_query.inline_message_id
-                       or update.callback_query.message.message_id)
-
-        return tuple(key)
+        return user.id if self.per_user else None
 
     def check_update(self, update):
 
         # Ignore messages in channels
         if (not isinstance(update, Update)
-                or update.channel_post
-                or self.per_chat and (update.inline_query or update.chosen_inline_result)
+                or update.channel_post):
+                # or self.per_chat and (update.inline_query or update.chosen_inline_result)
                 # or self.per_message and not update.callback_query
-                or update.callback_query and self.per_chat and not update.callback_query.message):
+                # or update.callback_query and self.per_chat and not update.callback_query.message):
             return False
 
         key = self._get_key(update)
+        self._load_state(key)
         state = self.conversations.get(key)
 
         # Resolve promises
@@ -266,9 +263,12 @@ class ConversationHandler(Handler):
         self.update_state(new_state, self.current_conversation)
 
     def handle_update(self, update, dispatcher):
+        key = self.current_conversation
+        if self._need_update_user_data.get(key):
+            dispatcher.user_data[key] = json.loads(self._state_in_database[key].data)
+            del self._need_update_user_data[key]
         self._handle_update(update, dispatcher)
         visited = dict()
-        key = self.current_conversation
         while key in self.conversations:
             state = self.conversations[key]
             handlers = self.states.get(state)
@@ -279,6 +279,7 @@ class ConversationHandler(Handler):
             visited[state] = True
             self.current_handler = handlers[0]
             self._handle_update(update, dispatcher)
+        self._save_state(key, dispatcher)
 
     def update_state(self, new_state, key):
         if new_state == self.END:
@@ -292,3 +293,20 @@ class ConversationHandler(Handler):
 
         elif new_state is not None:
             self.conversations[key] = new_state
+
+    def _load_state(self, key):
+        if key not in self.conversations and key not in self._state_in_database:
+            state_in_database = models.ConversationState.objects.filter(key=key).first()
+            if state_in_database:
+                self.conversations[key] = state_in_database.state
+                self._need_update_user_data[key] = True
+                self._state_in_database[key] = state_in_database
+            else:
+                self._state_in_database[key] = models.ConversationState(key=key)
+
+    def _save_state(self, key, dispatcher):
+        state_in_database = self._state_in_database.get(key, models.ConversationState(key=key))
+        state_in_database.state = self.conversations.get(key)
+        state_in_database.data = json.dumps(dispatcher.user_data.get(key))
+        state_in_database.save()
+        self._state_in_database[key] = state_in_database

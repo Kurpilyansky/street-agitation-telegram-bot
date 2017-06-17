@@ -104,6 +104,7 @@ def select_event_place_button(bot, update, user_data):
         match = re.match('^\d+$', query.data)
         if bool(match):
             user_data['place_id'] = int(query.data)
+            del user_data['place_offset']
             return SELECT_DATES
 
 
@@ -238,16 +239,17 @@ def create_event_series(bot, update, user_data):
     del user_data['time_range']
 
 
+def cancel(bot, update, user_data):
+    user_data.clear()
+    return MENU
+
+
 def help(bot, update):
-    update.message.reply_text('Help!')
+    update.message.reply_text('Help!', reply_markup=ReplyKeyboardRemove())
 
 
-def echo(bot, update):
-    update.message.reply_text(update.message.text)
-
-
-def error(bot, update, error):
-    logger.warn('Update "%s" caused error "%s"' % (update, error))
+def error_handler(bot, update, error):
+    logger.error('Update "%s" caused error "%s"' % (update, error))
 
 
 def run_bot():
@@ -284,8 +286,7 @@ def run_bot():
             CREATE_EVENT_SERIES: [EmptyHandler(create_event_series, pass_user_data=True),
                                   standard_callback_query_handler2]
         },
-        fallbacks=[  # CommandHandler('cancel', cancel),
-        ]
+        fallbacks=[CommandHandler('cancel', cancel, pass_user_data=True)]
     )
 
     # dp.add_handler(InlineQueryHandler(select_event_place, pass_user_data=True))
@@ -293,7 +294,7 @@ def run_bot():
     dp.add_handler(conv_handler)
 
     # log all errors
-    dp.add_error_handler(error)
+    dp.add_error_handler(error_handler)
 
     # Start the Bot
     updater.start_polling()
