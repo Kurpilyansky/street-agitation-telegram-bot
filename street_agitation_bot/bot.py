@@ -160,9 +160,13 @@ def select_event_dates(bot, update, user_data):
         for i in range(10):
             cur_date = today + timedelta(days=i)
             cur_date_str = "%02d.%02d" % (cur_date.day, cur_date.month)
-            dates_dict[cur_date_str] = {'date': cur_date, 'selected': False}
+            dates_dict[cur_date_str] = {'date': (cur_date.year, cur_date.month, cur_date.day),
+                                        'selected': False}
         user_data['dates_dict'] = dates_dict
-    update.effective_message.edit_text('Выберите дату', reply_markup=_build_dates_keyboard(user_data))
+    if update.callback_query:
+        update.effective_message.edit_text('Выберите дату', reply_markup=_build_dates_keyboard(user_data))
+    else:
+        update.effective_message.reply_text('Выберите дату', reply_markup=_build_dates_keyboard(user_data))
 
 
 def select_event_dates_button(bot, update, user_data):
@@ -219,8 +223,9 @@ def create_event_series(bot, update, user_data):
         to_seconds += 86400
 
     events = list()
-    for event_date in user_data['dates']:
+    for date_tuple in user_data['dates']:
         # TODO timezone
+        event_date = date(year=date_tuple[0], month=date_tuple[1], day=date_tuple[2])
         event_datetime = datetime.combine(event_date, datetime.min.time())
         event = models.AgitationEvent(
             place=place,
@@ -276,7 +281,7 @@ def run_bot():
                                 MessageHandler(Filters.text, set_place_address, pass_user_data=True),
                                 standard_callback_query_handler],
             SET_PLACE_LOCATION: [EmptyHandler(set_place_location_start),
-                                 MessageHandler(Filters.text, set_place_location, pass_user_data=True),
+                                 MessageHandler(Filters.location, set_place_location, pass_user_data=True),
                                  CallbackQueryHandler(skip_place_location, pass_user_data=True)],
             SELECT_DATES: [EmptyHandler(select_event_dates, pass_user_data=True),
                            CallbackQueryHandler(select_event_dates_button, pass_user_data=True)],
