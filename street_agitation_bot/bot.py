@@ -1,4 +1,4 @@
-from street_agitation_bot import bot_settings, models
+from street_agitation_bot import bot_settings, models, notifications
 
 import operator
 import re
@@ -19,6 +19,8 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 logger = logging.getLogger(__name__)
 
 
+YES = 'YES'
+NO = 'NO'
 BACK = 'BACK'
 FORWARD = 'FORWARD'
 TRASH = 'TRASH'
@@ -36,6 +38,7 @@ SAVE_ABILITIES = 'SAVE_ABILITIES'
 
 MENU = 'MENU'
 SCHEDULE = 'SCHEDULE'
+APPLY_TO_AGITATE = 'APPLY_TO_AGITATE'
 SET_EVENT_PLACE = 'SET_EVENT_PLACE'
 SELECT_EVENT_PLACE = 'SELECT_EVENT_PLACE'
 SET_PLACE_ADDRESS = 'SET_PLACE_ADDRESS'
@@ -204,22 +207,17 @@ def set_abilities_button(bot, update, user_data):
 
 @region_decorator
 def save_abilities(bot, update, user_data, region_id):
-    region = models.Region.get_by_id(region_id)
-    user = update.effective_user
-    agitator = models.Agitator.find_by_id(user.id)
+    agitator_id = update.effective_user.id
     text = ''
     for key, val in user_data['abilities'].items():
         text += "\n%s: %s" % (ABILITIES_TEXTS[key], "*да*" if val else "нет")
-    obj, created = models.AgitatorInRegion.save_abilities(region.id, user.id, user_data['abilities'])
+    obj, created = models.AgitatorInRegion.save_abilities(region_id, agitator_id, user_data['abilities'])
     send_message_text(bot, update, user_data,
                       'Данные сохранены' + text,
                       parse_mode="Markdown",
                       reply_markup=_create_back_to_menu_keyboard())
     if created:
-        bot.send_message(region.registrations_chat_it,
-                         'Новая анкета\nРегион %s\n%s%s'
-                         % (region.name, agitator.show_full(), text),
-                         parse_mode="Markdown")
+        notifications.notify_about_new_registration(bot, region_id, agitator_id, text)
     del user_data['abilities']
 
 
@@ -235,7 +233,7 @@ def show_menu(bot, update, user_data):
         keyboard.append([InlineKeyboardButton('Расписание', callback_data=SCHEDULE)])
     else:
         keyboard.append([InlineKeyboardButton('Выбрать регион', callback_data=SELECT_REGION)])
-    send_message_text(bot, update, user_data, 'Меню', edit_last=False, reply_markup=InlineKeyboardMarkup(keyboard))
+    send_message_text(bot, update, user_data, '*Меню*', parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
 
 
 @region_decorator
@@ -249,10 +247,75 @@ def show_schedule(bot, update, user_data, region_id):
     else:
         schedule_text = "В ближайшее время пока ничего не запланировано"
     schedule_text = "*Расписание*\n" + schedule_text
+    keyboard = _create_back_to_menu_keyboard()
+    if events:
+        keyboard.inline_keyboard[0:0] = [[InlineKeyboardButton('Записаться на куб', callback_data=APPLY_TO_AGITATE)]]
     send_message_text(bot, update, user_data,
                       schedule_text,
                       parse_mode="Markdown",
-                      reply_markup=_create_back_to_menu_keyboard())
+                      reply_markup=keyboard)
+
+EVENT_PAGE_SIZE = 5
+
+
+@region_decorator
+def apply_to_agitate(bot, update, user_data, region_id):
+    if 'event_id' in user_data:
+        event = models.AgitationEvent.objects.filter(id=user_data['event_id']).first()
+        if event:
+            keyboard = [[InlineKeyboardButton('Да', callback_data=YES),
+                         InlineKeyboardButton('Нет', callback_data=NO)]]
+            send_message_text(bot, update, user_data,
+                              '*Подтвердите, что ваш выбор*\n'
+                              'Вы хотитие волонтерить на кубе %s?' % event.show(),
+                              parse_mode="Markdown",
+                              reply_markup=InlineKeyboardMarkup(keyboard))
+            return
+        else:
+            del user_data['event_id']
+
+    if 'events_offset' not in user_data:
+        user_data['events_offset'] = 0
+
+    offset = user_data['events_offset']
+    query_set = models.AgitationEvent.objects.filter(start_date__gte=date.today(), place__region_id=region_id)
+    events = list(query_set.select_related('place')[offset:offset + EVENT_PAGE_SIZE])
+    keyboard = list()
+    if offset > 0:
+        keyboard.append([InlineKeyboardButton('Назад', callback_data=BACK)])
+    for event in events:
+        keyboard.append([InlineKeyboardButton(event.show(), callback_data=str(event.id))])
+    if query_set.count() > offset + EVENT_PAGE_SIZE:
+        keyboard.append([InlineKeyboardButton('Вперед', callback_data=FORWARD)])
+    keyboard.append([InlineKeyboardButton('<< Меню', callback_data=MENU)])
+    send_message_text(bot, update, user_data,
+                      '*В каких кубах вы хотите поучаствовать в качестве уличного агитатора?*',
+                      parse_mode="Markdown",
+                      reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+def apply_to_agitate_button(bot, update, user_data):
+    query = update.callback_query
+    query.answer()
+    if query.data == BACK:
+        user_data['events_offset'] -= EVENT_PAGE_SIZE
+    elif query.data == FORWARD:
+        user_data['events_offset'] += EVENT_PAGE_SIZE
+    elif query.data == NO:
+        del user_data['event_id']
+    elif query.data == YES:
+        event_id = user_data['event_id']
+        agitator_id = update.effective_user.id
+        created = models.AgitationEventParticipant.create(agitator_id, event_id)
+        if created:
+            notifications.notify_about_new_participant(bot, event_id, agitator_id)
+        del user_data['event_id']
+    elif query.data == MENU:
+        return MENU
+    else:
+        match = re.match('^\d+$', query.data)
+        if bool(match):
+            user_data['event_id'] = int(query.data)
 
 
 def set_event_place(bot, update, user_data):
@@ -271,12 +334,12 @@ def select_event_place(bot, update, user_data, region_id):
     if "place_offset" not in user_data:
         user_data["place_offset"] = 0
     offset = user_data["place_offset"]
-    places = models.AgitationPlace.objects.filter(
-        region_id=region_id).order_by('-last_update_time')[offset:offset+PLACE_PAGE_SIZE]
+    query_set = models.AgitationPlace.objects.filter(region_id=region_id)
+    places = query_set.order_by('-last_update_time')[offset:offset + PLACE_PAGE_SIZE]
     keyboard = [[InlineKeyboardButton("Назад", callback_data=BACK)]]
     for place in places:
         keyboard.append([InlineKeyboardButton(place.address, callback_data=str(place.id))])
-    if models.AgitationPlace.objects.count() > offset + PLACE_PAGE_SIZE:
+    if query_set.count() > offset + PLACE_PAGE_SIZE:
         keyboard.append([InlineKeyboardButton("Вперед", callback_data=FORWARD)])
     send_message_text(bot, update, user_data, "Выберите место", reply_markup=InlineKeyboardMarkup(keyboard))
 
@@ -498,6 +561,8 @@ def run_bot():
                              standard_callback_query_handler],
             MENU: [EmptyHandler(show_menu, pass_user_data=True), standard_callback_query_handler],
             SCHEDULE: [EmptyHandler(show_schedule, pass_user_data=True), standard_callback_query_handler],
+            APPLY_TO_AGITATE: [EmptyHandler(apply_to_agitate, pass_user_data=True),
+                               CallbackQueryHandler(apply_to_agitate_button, pass_user_data=True)],
             SET_EVENT_PLACE: [EmptyHandler(set_event_place, pass_user_data=True),
                               standard_callback_query_handler],
             SELECT_EVENT_PLACE: [EmptyHandler(select_event_place, pass_user_data=True),

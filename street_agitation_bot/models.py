@@ -62,8 +62,8 @@ class AgitatorInRegion(models.Model):
     @classmethod
     def save_abilities(cls, region_id, agitator_id, abilities):
         return cls.objects.update_or_create(region_id=region_id,
-                                     agitator_id=agitator_id,
-                                     defaults=abilities)
+                                            agitator_id=agitator_id,
+                                            defaults=abilities)
 
     @classmethod
     def get(cls, region_id, agitator_id):
@@ -92,7 +92,7 @@ class AgitationEvent(models.Model):
     end_date = models.DateTimeField(null=False)
 
     class Meta:
-        ordering = ['start_date']
+        ordering = ['start_date', 'place_id']
 
     def show(self):
         return "%s-%s, *%s*" % (self.start_date.strftime("%d.%m %H:%M"),
@@ -119,3 +119,20 @@ class ConversationState(models.Model):
         return "key '%s' state '%s' last_update_time '%s'\n" % (
             self.key, self.state, str(self.last_update_time)
         )
+
+
+class AgitationEventParticipant(models.Model):
+    agitator = models.ForeignKey(Agitator)
+    event = models.ForeignKey(AgitationEvent)
+
+    approved = models.BooleanField(default=False)
+    declined = models.BooleanField(default=False)
+    canceled = models.BooleanField(default=False)
+
+    @classmethod
+    def create(cls, agitator_id, event_id):
+        obj, created = cls.objects.update_or_create(agitator_id=agitator_id, event_id=event_id)
+        return created
+
+    class Meta:
+        unique_together = ('agitator', 'event')
