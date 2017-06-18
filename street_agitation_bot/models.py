@@ -53,6 +53,8 @@ class AgitatorInRegion(models.Model):
     agitator = models.ForeignKey(Agitator)
     region = models.ForeignKey(Region)
 
+    is_admin = models.BooleanField(default=False)
+
     have_registration = models.BooleanField(default=False)
     can_agitate = models.BooleanField(default=False)
     can_be_applicant = models.BooleanField(default=False)
@@ -90,6 +92,10 @@ class AgitationEvent(models.Model):
     place = models.ForeignKey(AgitationPlace)
     start_date = models.DateTimeField(null=False)
     end_date = models.DateTimeField(null=False)
+
+    @property
+    def region(self):
+        return self.place.region
 
     class Meta:
         ordering = ['start_date', 'place_id']

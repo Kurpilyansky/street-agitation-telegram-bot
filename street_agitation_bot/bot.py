@@ -229,11 +229,16 @@ def show_menu(bot, update, user_data):
             pass  # TODO caused error "Message is not modified"
     keyboard = list()
     if 'region_id' in user_data:
-        keyboard.append([InlineKeyboardButton('Добавить ивент', callback_data=SET_EVENT_PLACE)])
         keyboard.append([InlineKeyboardButton('Расписание', callback_data=SCHEDULE)])
+        keyboard.append([InlineKeyboardButton('Записаться на куб', callback_data=APPLY_TO_AGITATE)])
+        region_id = user_data['region_id']
+        agitator_id = update.effective_user.id
+        abilities = models.AgitatorInRegion.get(region_id, agitator_id)
+        if abilities.is_admin:
+            keyboard.append([InlineKeyboardButton('Добавить ивент', callback_data=SET_EVENT_PLACE)])
     else:
         keyboard.append([InlineKeyboardButton('Выбрать регион', callback_data=SELECT_REGION)])
-    send_message_text(bot, update, user_data, '*Меню*', parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
+    send_message_text(bot, update, user_data, '*Меню*\nВыберите действие для продолжения работы', parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
 
 
 @region_decorator
@@ -519,7 +524,7 @@ def change_region(bot, update, user_data):
 
 
 def _create_back_to_menu_keyboard():
-    return InlineKeyboardMarkup([[InlineKeyboardButton("Меню", callback_data=MENU)]])
+    return InlineKeyboardMarkup([[InlineKeyboardButton("<< Меню", callback_data=MENU)]])
 
 
 def help(bot, update):

@@ -44,16 +44,20 @@ class AgitatorInRegionAdmin(VersionAdmin):
     list_display = (
         'region',
         'agitator',
+        'have_registration',
         'can_be_applicant',
         'can_deliver',
         'can_hold',
+        'is_admin',
     )
 
     list_filter = (
         'region',
+        'have_registration',
         'can_be_applicant',
         'can_deliver',
         'can_hold',
+        'is_admin',
     )
 
     search_fields = (
@@ -67,10 +71,12 @@ class AgitatorInRegionAdmin(VersionAdmin):
 class AgitationPlaceAdmin(VersionAdmin):
     list_display = (
         'id',
+        'region',
         'address',
     )
 
     list_filter = (
+        'region',
     )
 
     search_fields = (
@@ -82,13 +88,17 @@ class AgitationPlaceAdmin(VersionAdmin):
 class AgitationEventAdmin(VersionAdmin):
     list_display = (
         'id',
+        'region',
         'place',
         'start_date',
         'end_date',
     )
+    list_filter = (
+    )
 
     search_fields = (
         'place__address',
+        'place__region__name',
     )
 
 
