@@ -49,7 +49,7 @@ def region_decorator(func):
     def wrapper(bot, update, user_data, *args, **kwargs):
         if 'region_id' not in user_data:
             return change_region(bot, update, user_data)
-        return func(bot, update, user_data, region_id=user_data['region_id'])
+        return func(bot, update, user_data, region_id=user_data['region_id'], *args, **kwargs)
 
     return wrapper
 
