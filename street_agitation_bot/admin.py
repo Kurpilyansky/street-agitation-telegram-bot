@@ -102,6 +102,27 @@ class AgitationEventAdmin(VersionAdmin):
     )
 
 
+class AgitationEventParticipantAdmin(VersionAdmin):
+    list_display = (
+        'id',
+        'agitator',
+        'event',
+        'approved',
+        'declined',
+        'canceled',
+    )
+    list_filter = (
+        'approved',
+        'declined',
+        'canceled',
+    )
+
+    search_fields = (
+        '=id',
+        'agitator__full_name',
+    )
+
+
 class ConversationStateAdmin(VersionAdmin):
     list_display = (
         'key',
@@ -117,4 +138,5 @@ admin.site.register(models.Agitator, AgitatorAdmin)
 admin.site.register(models.AgitatorInRegion, AgitatorInRegionAdmin)
 admin.site.register(models.AgitationPlace, AgitationPlaceAdmin)
 admin.site.register(models.AgitationEvent, AgitationEventAdmin)
+admin.site.register(models.AgitationEventParticipant, AgitationEventParticipantAdmin)
 admin.site.register(models.ConversationState, ConversationStateAdmin)

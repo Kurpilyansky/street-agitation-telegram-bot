@@ -105,6 +105,11 @@ class AgitationEvent(models.Model):
                                 self.end_date.strftime("%H:%M"),
                                 self.place.address)
 
+    def __str__(self):
+        return "%s-%s, %s" % (self.start_date.strftime("%d.%m %H:%M"),
+                              self.end_date.strftime("%H:%M"),
+                              self.place.address)
+
 
 class ConversationState(models.Model):
     key = models.CharField(max_length=400, blank=True, null=True, unique=True)
@@ -139,6 +144,18 @@ class AgitationEventParticipant(models.Model):
     def create(cls, agitator_id, event_id):
         obj, created = cls.objects.update_or_create(agitator_id=agitator_id, event_id=event_id)
         return created
+
+    @classmethod
+    def get(cls, agitator_id, event_id):
+        return cls.objects.filter(agitator_id=agitator_id, event_id=event_id).first()
+
+    @classmethod
+    def approve(cls, id):
+        return cls.objects.filter(id=id).update(approved=True, declined=False)
+
+    @classmethod
+    def decline(cls, id):
+        return cls.objects.filter(id=id).update(approved=False, declined=True)
 
     class Meta:
         unique_together = ('agitator', 'event')
