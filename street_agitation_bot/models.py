@@ -42,6 +42,9 @@ class Agitator(models.Model):
     def find_by_id(cls, id):
         return cls.objects.filter(telegram_id=id).first()
 
+    def show_full(self):
+        return '%s @%s %s' % (self.full_name, self.telegram, self.phone)
+
     def __str__(self):
         return '%s @%s' % (self.full_name, self.telegram)
 
@@ -58,7 +61,7 @@ class AgitatorInRegion(models.Model):
 
     @classmethod
     def save_abilities(cls, region_id, agitator_id, abilities):
-        cls.objects.update_or_create(region_id=region_id,
+        return cls.objects.update_or_create(region_id=region_id,
                                      agitator_id=agitator_id,
                                      defaults=abilities)
 

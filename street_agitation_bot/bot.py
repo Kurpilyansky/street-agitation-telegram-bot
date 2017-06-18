@@ -196,8 +196,20 @@ def set_abilities_button(bot, update, user_data):
 def save_abilities(bot, update, user_data, region_id):
     region = models.Region.get_by_id(region_id)
     user = update.effective_user
-    models.AgitatorInRegion.save_abilities(region.id, user.id, user_data['abilities'])
-    reply_or_edit_text(update, 'Данные сохранены', reply_markup=_create_back_to_menu_keyboard())
+    agitator = models.Agitator.find_by_id(user.id)
+    text = ''
+    for key, val in user_data['abilities'].items():
+        text += "\n%s: %s" % (ABILITIES_TEXTS[key], "*да*" if val else "нет")
+    obj, created = models.AgitatorInRegion.save_abilities(region.id, user.id, user_data['abilities'])
+    reply_or_edit_text(update,
+                       'Данные сохранены' + text,
+                       parse_mode="Markdown",
+                       reply_markup=_create_back_to_menu_keyboard())
+    if created:
+        bot.send_message(region.registrations_chat_it,
+                         'Новая анкета\nРегион %s\n%s%s'
+                         % (region.name, agitator.show_full(), text),
+                         parse_mode="Markdown")
     del user_data['abilities']
 
 
@@ -453,6 +465,7 @@ def run_bot():
     standard_callback_query_handler = CallbackQueryHandler(standard_callback)
 
     conv_handler = ConversationHandler(
+        filters=~Filters.group,
         entry_points=[CommandHandler("start", start)],
 
         states={

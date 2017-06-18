@@ -110,6 +110,7 @@ class ConversationHandler(Handler):
                  entry_points,
                  states,
                  fallbacks,
+                 filters=None,
                  allow_reentry=False,
                  run_async_timeout=None,
                  timed_out_behavior=None,
@@ -123,6 +124,8 @@ class ConversationHandler(Handler):
 
         self.fallbacks = fallbacks
         """:type: list[telegram.ext.Handler]"""
+
+        self.filters = filters
 
         self.allow_reentry = allow_reentry
         self.run_async_timeout = run_async_timeout
@@ -182,6 +185,8 @@ class ConversationHandler(Handler):
                 # or self.per_chat and (update.inline_query or update.chosen_inline_result)
                 # or self.per_message and not update.callback_query
                 # or update.callback_query and self.per_chat and not update.callback_query.message):
+            return False
+        if self.filters and not self.filters(update.effective_message):
             return False
 
         key = self._get_key(update)
