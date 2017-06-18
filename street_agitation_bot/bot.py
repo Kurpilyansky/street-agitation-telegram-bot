@@ -18,15 +18,34 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 
 logger = logging.getLogger(__name__)
 
-(MENU,
- BACK, FORWARD, TRASH,
- SCHEDULE,
- SET_EVENT_PLACE, SELECT_EVENT_PLACE,
- SET_PLACE_ADDRESS,
- SET_PLACE_LOCATION, SKIP_PLACE_LOCATION,
- SELECT_DATES, SELECT_DATES_END,
- SET_EVENT_TIME,
- CREATE_EVENT_SERIES) = map(lambda x: "s"+str(x), range(14))
+
+BACK = 'BACK'
+FORWARD = 'FORWARD'
+TRASH = 'TRASH'
+SKIP = 'SKIP'
+END = 'END'
+
+SET_FULL_NAME = 'SET_FULL_NAME'
+SET_PHONE = 'SET_PHONE'
+SET_ABILITIES = 'SET_ABILITIES'
+SAVE_PROFILE = 'SAVE_PROFILE'
+
+MENU = 'MENU'
+SCHEDULE = 'SCHEDULE'
+SET_EVENT_PLACE = 'SET_EVENT_PLACE'
+SELECT_EVENT_PLACE = 'SELECT_EVENT_PLACE'
+SET_PLACE_ADDRESS = 'SET_PLACE_ADDRESS'
+SET_PLACE_LOCATION = 'SET_PLACE_LOCATION'
+SELECT_DATES = 'SELECT_DATES'
+SET_EVENT_TIME = 'SET_EVENT_TIME'
+CREATE_EVENT_SERIES = 'CREATE_EVENT_SERIES'
+
+
+def reply_or_edit_text(update, *args, **kwargs):
+    if update.callback_query:
+        update.callback_query.edit_message_text(*args, **kwargs)
+    else:
+        update.effective_message.reply_text(*args, **kwargs)
 
 
 def standard_callback(bot, update):
@@ -43,7 +62,75 @@ def standard_callback_hide(bot, update):
 
 
 def start(bot, update):
-    return MENU
+    if models.Agitator.objects.filter(telegram_id=update.effective_user.id).exists():
+        return MENU
+    else:
+        return SET_FULL_NAME
+
+
+def set_full_name_start(bot, update, user_data):
+    reply_or_edit_text(update, 'Укажите ваше имя')
+
+
+def set_full_name(bot, update, user_data):
+    user_data["full_name"] = update.message.text
+    return SET_PHONE
+
+
+def set_phone_start(bot, update, user_data):
+    reply_or_edit_text(update, 'Укажите ваш телефон')
+
+
+def set_phone(bot, update, user_data):
+    user_data["phone"] = update.message.text
+    return SET_ABILITIES
+
+
+ABILITIES_TEXTS = {
+    'can_agitate': 'Агитировать на улице',
+    'can_apply': 'Подать заявку в администрацию',
+    'can_deliver': 'Доставить куб на машине',
+    'can_hold': 'Хранить куб дома',
+}
+
+
+def set_abilities(bot, update, user_data):
+    if 'abilities' not in user_data:
+        user_data['abilities'] = collections.OrderedDict([
+            ('can_agitate', False),
+            ('can_apply', False),
+            ('can_deliver', False),
+            ('can_hold', False),
+        ])
+    keyboard = list()
+    for key, val in user_data['abilities'].items():
+        text = ("+ " if val else "") + ABILITIES_TEXTS[key]
+        keyboard.append([InlineKeyboardButton(text, callback_data=key)])
+    keyboard.append([InlineKeyboardButton('Закончить', callback_data=END)])
+    reply_or_edit_text(update, 'Чем вы готовы помочь?', reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+def set_abilities_button(bot, update, user_data):
+    query = update.callback_query
+    query.answer()
+    if query.data == END:
+        return SAVE_PROFILE
+    elif query.data in user_data['abilities']:
+        user_data['abilities'][query.data] ^= True
+
+
+def save_profile(bot, update, user_data):
+    user = update.effective_user
+    agitator, created = models.Agitator.objects.update_or_create(
+                                telegram_id=user.id,
+                                defaults={'full_name': user_data.get('full_name'),
+                                          'phone': user_data.get('phone'),
+                                          'telegram': user.username})
+    text = 'Спасибо за регистрацию!' if created else 'Данные обновлены'
+    reply_or_edit_text(update, text, reply_markup=_create_back_to_menu_keyboard())
+
+    del user_data['full_name']
+    del user_data['phone']
 
 
 def show_menu(bot, update):
@@ -55,22 +142,22 @@ def show_menu(bot, update):
 
 def show_schedule(bot, update):
     events = list(models.AgitationEvent.objects.filter(start_date__gte=date.today()))
-    print(events)
     if events:
         schedule_text = "\n".join(map(operator.methodcaller("show"), events))
     else:
         schedule_text = "В ближайшее время пока ничего не запланировано"
-    print(schedule_text)
-    inline_keyboard_markup = InlineKeyboardMarkup([[InlineKeyboardButton('Меню', callback_data=MENU)]])
-    update.callback_query.edit_message_text(schedule_text,
-                              parse_mode="Markdown",
-                              reply_markup=inline_keyboard_markup)
+    reply_or_edit_text(update,
+                       schedule_text,
+                       parse_mode="Markdown",
+                       reply_markup=_create_back_to_menu_keyboard())
 
 
 def set_event_place(bot, update):
     keyboard = [[InlineKeyboardButton('Выбрать место из старых', callback_data=SELECT_EVENT_PLACE)],
                 [InlineKeyboardButton('Создать новое место', callback_data=SET_PLACE_ADDRESS)]]
-    update.effective_message.edit_text(text="Укажите место", reply_markup=InlineKeyboardMarkup(keyboard))
+    reply_or_edit_text(update,
+                       "Укажите место",
+                       reply_markup=InlineKeyboardMarkup(keyboard))
 
 
 PLACE_PAGE_SIZE = 5
@@ -86,7 +173,7 @@ def select_event_place(bot, update, user_data):
         keyboard.append([InlineKeyboardButton(place.address, callback_data=str(place.id))])
     if models.AgitationPlace.objects.count() > offset + PLACE_PAGE_SIZE:
         keyboard.append([InlineKeyboardButton("Вперед", callback_data=FORWARD)])
-    update.effective_message.edit_text("Выберите место", reply_markup=InlineKeyboardMarkup(keyboard))
+    reply_or_edit_text(update, "Выберите место", reply_markup=InlineKeyboardMarkup(keyboard))
 
 
 def select_event_place_button(bot, update, user_data):
@@ -110,7 +197,7 @@ def select_event_place_button(bot, update, user_data):
 
 def set_place_address_start(bot, update):
     keyboard = [[InlineKeyboardButton("Назад", callback_data=SET_EVENT_PLACE)]]
-    update.effective_message.edit_text('Введите адрес', reply_markup=InlineKeyboardMarkup(keyboard))
+    reply_or_edit_text(update, 'Введите адрес', reply_markup=InlineKeyboardMarkup(keyboard))
 
 
 def set_place_address(bot, update, user_data):
@@ -119,21 +206,24 @@ def set_place_address(bot, update, user_data):
 
 
 def set_place_location_start(bot, update):
-    keyboard = [[InlineKeyboardButton("Не указывать", callback_data=SKIP_PLACE_LOCATION)]]
-    update.message.reply_text('Отправь геопозицию',
-                              reply_markup=InlineKeyboardMarkup(keyboard))
+    keyboard = [[InlineKeyboardButton("Не указывать", callback_data=SKIP)]]
+    reply_or_edit_text(update, 'Отправь геопозицию', reply_markup=InlineKeyboardMarkup(keyboard))
 
 
 def set_place_location(bot, update, user_data):
-    user_data['location'] = update.message.location
+    location = update.message.location
+    user_data['location'] = {
+        'latitude': location.latitude,
+        'longitude': location.longitude,
+    }
     return SELECT_DATES
 
 
 def skip_place_location(bot, update, user_data):
     query = update.callback_query
     query.answer()
-    if query.data == SKIP_PLACE_LOCATION:
-        user_data['location'] = None
+    if query.data == SKIP:
+        user_data['location'] = {}
         return SELECT_DATES
 
 
@@ -143,11 +233,11 @@ def chunks(arr, chunk_len):
 
 def _build_dates_keyboard(user_data):
     dates_dict = user_data['dates_dict']
-    buttons = [InlineKeyboardButton(("- " if value["selected"] else "") + key, callback_data=key)
+    buttons = [InlineKeyboardButton(("+ " if value["selected"] else "") + key, callback_data=key)
                for key, value in dates_dict.items()]
     keyboard = chunks(buttons, 5)
     if any([value for value in dates_dict.values() if value["selected"]]):
-        keyboard.append([InlineKeyboardButton("Закончить", callback_data=SELECT_DATES_END)])
+        keyboard.append([InlineKeyboardButton("Закончить", callback_data=END)])
     else:
         keyboard.append([InlineKeyboardButton("Нужно выбрать хотя бы одну дату", callback_data=TRASH)])
     return InlineKeyboardMarkup(keyboard)
@@ -163,17 +253,14 @@ def select_event_dates(bot, update, user_data):
             dates_dict[cur_date_str] = {'date': (cur_date.year, cur_date.month, cur_date.day),
                                         'selected': False}
         user_data['dates_dict'] = dates_dict
-    if update.callback_query:
-        update.effective_message.edit_text('Выберите дату', reply_markup=_build_dates_keyboard(user_data))
-    else:
-        update.effective_message.reply_text('Выберите дату', reply_markup=_build_dates_keyboard(user_data))
+    reply_or_edit_text(update, 'Выберите дату', reply_markup=_build_dates_keyboard(user_data))
 
 
 def select_event_dates_button(bot, update, user_data):
     query = update.callback_query
     query.answer()
     dates_dict = user_data['dates_dict']
-    if query.data == SELECT_DATES_END:
+    if query.data == END:
         user_data['dates'] = [value["date"] for value in dates_dict.values() if value["selected"]]
         del user_data['dates_dict']
         return SET_EVENT_TIME
@@ -185,8 +272,9 @@ def set_event_time_start(bot, update):
     keyboard = list()
     for c in ['16:00-19:00', '17:00-20:00']:
         keyboard.append([InlineKeyboardButton(c, callback_data=c)])
-    update.effective_message.edit_text('Выберите время (например, "7:00 - 09:59" или "17:00-20:00")',
-                                       reply_markup=InlineKeyboardMarkup(keyboard))
+    reply_or_edit_text(update,
+                       'Выберите время (например, "7:00 - 09:59" или "17:00-20:00")',
+                       reply_markup=InlineKeyboardMarkup(keyboard))
 
 
 def set_event_time(bot, update, user_data):
@@ -209,8 +297,8 @@ def create_event_series(bot, update, user_data):
         location = user_data['location']
         place = models.AgitationPlace(
             address=user_data['address'],
-            geo_latitude=location.latitude if location else None,
-            geo_longitude=location.longitude if location else None
+            geo_latitude=location.get('latitude'),
+            geo_longitude=location.get('longitude'),
         )
         place.save()
         del user_data['address']
@@ -235,10 +323,7 @@ def create_event_series(bot, update, user_data):
         event.save()
         events.append(event)
     text = "\n".join(["Добавлено:"] + list(map(operator.methodcaller("show"), events)))
-    inline_keyboard_markup = InlineKeyboardMarkup([[InlineKeyboardButton("Меню", callback_data=MENU)]])
-    update.effective_message.edit_text(text,
-                                       parse_mode="Markdown",
-                                       reply_markup=inline_keyboard_markup)
+    reply_or_edit_text(update, text, parse_mode="Markdown", reply_markup=_create_back_to_menu_keyboard())
 
     del user_data['dates']
     del user_data['time_range']
@@ -247,6 +332,10 @@ def create_event_series(bot, update, user_data):
 def cancel(bot, update, user_data):
     user_data.clear()
     return MENU
+
+
+def _create_back_to_menu_keyboard():
+    return InlineKeyboardMarkup([[InlineKeyboardButton("Меню", callback_data=MENU)]])
 
 
 def help(bot, update):
@@ -272,6 +361,14 @@ def run_bot():
         entry_points=[CommandHandler("start", start)],
 
         states={
+            SET_FULL_NAME: [EmptyHandler(set_full_name_start, pass_user_data=True),
+                            MessageHandler(Filters.text, set_full_name, pass_user_data=True)],
+            SET_PHONE: [EmptyHandler(set_phone_start, pass_user_data=True),
+                        MessageHandler(Filters.text, set_phone, pass_user_data=True)],
+            SET_ABILITIES: [EmptyHandler(set_abilities, pass_user_data=True),
+                            CallbackQueryHandler(set_abilities_button, pass_user_data=True)],
+            SAVE_PROFILE: [EmptyHandler(save_profile, pass_user_data=True),
+                           standard_callback_query_handler2],
             MENU: [EmptyHandler(show_menu), standard_callback_query_handler],
             SCHEDULE: [EmptyHandler(show_schedule), standard_callback_query_handler2],
             SET_EVENT_PLACE: [EmptyHandler(set_event_place), standard_callback_query_handler],

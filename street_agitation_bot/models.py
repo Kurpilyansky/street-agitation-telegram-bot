@@ -4,9 +4,15 @@ from django.db import models
 
 
 class Agitator(models.Model):
+    telegram_id = models.IntegerField(primary_key=True)
+    telegram = models.CharField(max_length=100, blank=False, null=False)
     full_name = models.CharField(max_length=200, blank=False, null=False)
     phone = models.CharField(max_length=50, blank=False, null=False)
-    telegram = models.CharField(max_length=100, blank=False, null=False)
+
+    registration_date = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return '%s @%s' % (self.full_name, self.telegram)
 
 
 class AgitationPlace(models.Model):
@@ -36,6 +42,7 @@ class AgitationEvent(models.Model):
 
 class ConversationState(models.Model):
     key = models.CharField(max_length=400, blank=True, null=True, unique=True)
+    agitator = models.ForeignKey(Agitator, blank=True, null=True)
     state = models.CharField(max_length=400, blank=True, null=True)
     data = models.TextField(max_length=64000, blank=True, null=True)
     last_update_time = models.DateTimeField(auto_now=True)
@@ -43,7 +50,12 @@ class ConversationState(models.Model):
     class Meta:
         ordering = ['-last_update_time']
 
+    def __repr__(self):
+        return "key '%s' agitator '%s' state '%s' data '%s' last_update_time '%s'\n" % (
+            self.key, self.agitator, self.state, self.data, str(self.last_update_time)
+        )
+
     def __str__(self):
-        return "key '%s' state '%s' data '%s' last_update_time '%s'\n" % (
-            self.key, self.state, self.data, str(self.last_update_time)
+        return "key '%s' state '%s' last_update_time '%s'\n" % (
+            self.key, self.state, str(self.last_update_time)
         )

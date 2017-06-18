@@ -5,6 +5,24 @@ from reversion.admin import VersionAdmin
 from . import models
 
 
+class AgitatorAdmin(VersionAdmin):
+    list_display = (
+        'telegram_id',
+        'telegram',
+        'full_name',
+        'phone',
+    )
+
+    list_filter = (
+    )
+
+    search_fields = (
+        '=id',
+        'telegram',
+        'full_name',
+    )
+
+
 class AgitationPlaceAdmin(VersionAdmin):
     list_display = (
         'id',
@@ -43,6 +61,7 @@ class ConversationStateAdmin(VersionAdmin):
     )
 
 
+admin.site.register(models.Agitator, AgitatorAdmin)
 admin.site.register(models.AgitationPlace, AgitationPlaceAdmin)
 admin.site.register(models.AgitationEvent, AgitationEventAdmin)
 admin.site.register(models.ConversationState, ConversationStateAdmin)
