@@ -45,6 +45,15 @@ SET_EVENT_TIME = 'SET_EVENT_TIME'
 CREATE_EVENT_SERIES = 'CREATE_EVENT_SERIES'
 
 
+def region_decorator(func):
+    def wrapper(bot, update, user_data, *args, **kwargs):
+        if 'region_id' not in user_data:
+            return change_region(bot, update, user_data)
+        return func(bot, update, user_data, region_id=user_data['region_id'])
+
+    return wrapper
+
+
 def reply_or_edit_text(update, *args, **kwargs):
     if update.callback_query:
         update.callback_query.edit_message_text(*args, **kwargs)
@@ -183,8 +192,8 @@ def set_abilities_button(bot, update, user_data):
         user_data['abilities'][query.data] ^= True
 
 
-def save_abilities(bot, update, user_data):
-    region_id = user_data.get('region_id')
+@region_decorator
+def save_abilities(bot, update, user_data, region_id):
     region = models.Region.get_by_id(region_id)
     user = update.effective_user
     models.AgitatorInRegion.save_abilities(region.id, user.id, user_data['abilities'])
@@ -207,8 +216,8 @@ def show_menu(bot, update, user_data):
     update.effective_message.reply_text('Меню', reply_markup=InlineKeyboardMarkup(keyboard))
 
 
-def show_schedule(bot, update, user_data):
-    region_id = user_data.get('region_id')
+@region_decorator
+def show_schedule(bot, update, user_data, region_id):
     events = list(models.AgitationEvent.objects.filter(
         start_date__gte=date.today(),
         place__region_id=region_id
@@ -235,8 +244,8 @@ def set_event_place(bot, update):
 PLACE_PAGE_SIZE = 5
 
 
-def select_event_place(bot, update, user_data):
-    region_id = user_data.get('region_id')
+@region_decorator
+def select_event_place(bot, update, user_data, region_id):
     if "place_offset" not in user_data:
         user_data["place_offset"] = 0
     offset = user_data["place_offset"]
@@ -362,9 +371,8 @@ def set_event_time(bot, update, user_data):
         return CREATE_EVENT_SERIES
 
 
-def create_event_series(bot, update, user_data):
-    region_id = user_data.get('region_id')
-    region = models.Region.get_by_id(region_id)
+@region_decorator
+def create_event_series(bot, update, user_data, region_id):
     if 'place_id' in user_data:
         place = models.AgitationPlace.objects.get(id=user_data['place_id'])
         place.save()  # for update last_update_time
