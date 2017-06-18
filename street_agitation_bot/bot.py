@@ -6,7 +6,7 @@ import collections
 from datetime import datetime, date, timedelta
 from telegram import (ReplyKeyboardMarkup, ReplyKeyboardRemove,
                       InlineKeyboardButton, InlineKeyboardMarkup,
-                      InlineQueryResultArticle)
+                      InlineQueryResultArticle, TelegramError)
 from telegram.ext import (Updater, CommandHandler, MessageHandler, Filters, RegexHandler,
                           CallbackQueryHandler, InlineQueryHandler)
 from street_agitation_bot.handlers import (ConversationHandler, EmptyHandler)
@@ -27,8 +27,12 @@ END = 'END'
 
 SET_FULL_NAME = 'SET_FULL_NAME'
 SET_PHONE = 'SET_PHONE'
-SET_ABILITIES = 'SET_ABILITIES'
 SAVE_PROFILE = 'SAVE_PROFILE'
+
+SELECT_REGION = 'SELECT_REGION'
+ADD_REGION = 'ADD_REGION'
+SET_ABILITIES = 'SET_ABILITIES'
+SAVE_ABILITIES = 'SAVE_ABILITIES'
 
 MENU = 'MENU'
 SCHEDULE = 'SCHEDULE'
@@ -50,13 +54,6 @@ def reply_or_edit_text(update, *args, **kwargs):
 
 def standard_callback(bot, update):
     query = update.callback_query
-    query.answer()
-    return query.data
-
-
-def standard_callback_hide(bot, update):
-    query = update.callback_query
-    query.edit_message_reply_markup(reply_markup=None)
     query.answer()
     return query.data
 
@@ -83,40 +80,7 @@ def set_phone_start(bot, update, user_data):
 
 def set_phone(bot, update, user_data):
     user_data["phone"] = update.message.text
-    return SET_ABILITIES
-
-
-ABILITIES_TEXTS = {
-    'can_agitate': 'Агитировать на улице',
-    'can_apply': 'Подать заявку в администрацию',
-    'can_deliver': 'Доставить куб на машине',
-    'can_hold': 'Хранить куб дома',
-}
-
-
-def set_abilities(bot, update, user_data):
-    if 'abilities' not in user_data:
-        user_data['abilities'] = collections.OrderedDict([
-            ('can_agitate', False),
-            ('can_apply', False),
-            ('can_deliver', False),
-            ('can_hold', False),
-        ])
-    keyboard = list()
-    for key, val in user_data['abilities'].items():
-        text = ("+ " if val else "") + ABILITIES_TEXTS[key]
-        keyboard.append([InlineKeyboardButton(text, callback_data=key)])
-    keyboard.append([InlineKeyboardButton('Закончить', callback_data=END)])
-    reply_or_edit_text(update, 'Чем вы готовы помочь?', reply_markup=InlineKeyboardMarkup(keyboard))
-
-
-def set_abilities_button(bot, update, user_data):
-    query = update.callback_query
-    query.answer()
-    if query.data == END:
-        return SAVE_PROFILE
-    elif query.data in user_data['abilities']:
-        user_data['abilities'][query.data] ^= True
+    return SAVE_PROFILE
 
 
 def save_profile(bot, update, user_data):
@@ -126,26 +90,134 @@ def save_profile(bot, update, user_data):
                                 defaults={'full_name': user_data.get('full_name'),
                                           'phone': user_data.get('phone'),
                                           'telegram': user.username})
-    text = 'Спасибо за регистрацию!' if created else 'Данные обновлены'
+
+    text = 'Спасибо за регистрацию!' if created else 'Данные профиля обновлены'
     reply_or_edit_text(update, text, reply_markup=_create_back_to_menu_keyboard())
 
     del user_data['full_name']
     del user_data['phone']
 
 
-def show_menu(bot, update):
+def select_region(bot, update):
+    agitator = models.Agitator.find_by_id(update.effective_user.id)
+    if not agitator:
+        return SET_FULL_NAME
+    regions = agitator.regions
+    if not regions:
+        return ADD_REGION
     keyboard = list()
-    keyboard.append([InlineKeyboardButton('Добавить ивент', callback_data=SET_EVENT_PLACE)])
-    keyboard.append([InlineKeyboardButton('Расписание', callback_data=SCHEDULE)])
+    for region in regions:
+        keyboard.append([InlineKeyboardButton(region.name, callback_data=str(region.id))])
+    keyboard.append([InlineKeyboardButton('Добавить другой регион', callback_data=ADD_REGION)])
+    reply_or_edit_text(update, 'Выберите регион', reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+def select_region_button(bot, update, user_data):
+    query = update.callback_query
+    query.answer()
+    if query.data == ADD_REGION:
+        return ADD_REGION
+    else:
+        region = models.Region.get_by_id(query.data)
+        user_data['region_id'] = query.data
+        reply_or_edit_text(update, 'Выбран регион «%s»' % region.name)
+        return MENU
+
+
+def add_region_start(bot, update, user_data):
+    if 'unknown_region_name' in user_data:
+        text = 'Регион «%s» не зарегистрирован в системе.\n' \
+               'Введите название региона или города' % user_data['unknown_region_name']
+        del user_data['unknown_region_name']
+        reply_or_edit_text(update, text)
+    else:
+        reply_or_edit_text(update, 'Введите название региона или города')
+
+
+def add_region(bot, update, user_data):
+    user = update.effective_user
+    region_name = update.message.text
+    region = models.Region.find_by_name(region_name, update.effective_user.id)
+    if region:
+        if models.AgitatorInRegion.get(region.id, user.id):
+            reply_or_edit_text(update, 'Данный регион уже добавлен')
+            return MENU
+        user_data['region_id'] = region.id
+        return SET_ABILITIES
+    else:
+        user_data['unknown_region_name'] = region_name
+
+
+ABILITIES_TEXTS = {
+    'have_registration': 'Есть постоянная или временная регистрация в данном регионе',
+    'can_agitate': 'Агитировать на улице',
+    'can_be_applicant': 'Быть заявителем кубов',
+    'can_deliver': 'Доставить куб на машине',
+    'can_hold': 'Хранить куб дома',
+}
+
+
+def set_abilities(bot, update, user_data):
+    if 'abilities' not in user_data:
+        user_data['abilities'] = collections.OrderedDict([
+            ('have_registration', False),
+            ('can_agitate', False),
+            ('can_be_applicant', False),
+            ('can_deliver', False),
+            ('can_hold', False),
+        ])
+    keyboard = list()
+    for key, val in user_data['abilities'].items():
+        text = ("+ " if val else "") + ABILITIES_TEXTS[key]
+        keyboard.append([InlineKeyboardButton(text, callback_data=key)])
+    keyboard.append([InlineKeyboardButton('-- Закончить выбор --', callback_data=END)])
+    reply_or_edit_text(update, 'Чем вы готовы помочь?', reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+def set_abilities_button(bot, update, user_data):
+    query = update.callback_query
+    query.answer()
+    if query.data == END:
+        return SAVE_ABILITIES
+    elif query.data in user_data['abilities']:
+        user_data['abilities'][query.data] ^= True
+
+
+def save_abilities(bot, update, user_data):
+    region_id = user_data.get('region_id')
+    region = models.Region.get_by_id(region_id)
+    user = update.effective_user
+    models.AgitatorInRegion.save_abilities(region.id, user.id, user_data['abilities'])
+    reply_or_edit_text(update, 'Данные сохранены', reply_markup=_create_back_to_menu_keyboard())
+    del user_data['abilities']
+
+
+def show_menu(bot, update, user_data):
+    if update.callback_query:
+        try:
+            update.callback_query.edit_message_reply_markup(reply_markup=None)
+        except TelegramError:
+            pass  # TODO caused error "Message is not modified"
+    keyboard = list()
+    if 'region_id' in user_data:
+        keyboard.append([InlineKeyboardButton('Добавить ивент', callback_data=SET_EVENT_PLACE)])
+        keyboard.append([InlineKeyboardButton('Расписание', callback_data=SCHEDULE)])
+    else:
+        keyboard.append([InlineKeyboardButton('Выбрать регион', callback_data=SELECT_REGION)])
     update.effective_message.reply_text('Меню', reply_markup=InlineKeyboardMarkup(keyboard))
 
 
-def show_schedule(bot, update):
-    events = list(models.AgitationEvent.objects.filter(start_date__gte=date.today()))
+def show_schedule(bot, update, user_data):
+    region_id = user_data.get('region_id')
+    events = list(models.AgitationEvent.objects.filter(
+        start_date__gte=date.today(),
+        place__region_id=region_id
+    ))
     if events:
         schedule_text = "\n".join(map(operator.methodcaller("show"), events))
     else:
         schedule_text = "В ближайшее время пока ничего не запланировано"
+    schedule_text = "*Расписание*\n" + schedule_text
     reply_or_edit_text(update,
                        schedule_text,
                        parse_mode="Markdown",
@@ -164,10 +236,12 @@ PLACE_PAGE_SIZE = 5
 
 
 def select_event_place(bot, update, user_data):
+    region_id = user_data.get('region_id')
     if "place_offset" not in user_data:
         user_data["place_offset"] = 0
     offset = user_data["place_offset"]
-    places = models.AgitationPlace.objects.order_by('-last_update_time')[offset:offset+PLACE_PAGE_SIZE]
+    places = models.AgitationPlace.objects.filter(
+        region_id=region_id).order_by('-last_update_time')[offset:offset+PLACE_PAGE_SIZE]
     keyboard = [[InlineKeyboardButton("Назад", callback_data=BACK)]]
     for place in places:
         keyboard.append([InlineKeyboardButton(place.address, callback_data=str(place.id))])
@@ -289,6 +363,8 @@ def set_event_time(bot, update, user_data):
 
 
 def create_event_series(bot, update, user_data):
+    region_id = user_data.get('region_id')
+    region = models.Region.get_by_id(region_id)
     if 'place_id' in user_data:
         place = models.AgitationPlace.objects.get(id=user_data['place_id'])
         place.save()  # for update last_update_time
@@ -296,6 +372,7 @@ def create_event_series(bot, update, user_data):
     else:
         location = user_data['location']
         place = models.AgitationPlace(
+            region_id=region_id,
             address=user_data['address'],
             geo_latitude=location.get('latitude'),
             geo_longitude=location.get('longitude'),
@@ -303,6 +380,9 @@ def create_event_series(bot, update, user_data):
         place.save()
         del user_data['address']
         del user_data['location']
+
+    if place.region_id != region_id:
+        return cancel(bot, update, user_data)
 
     time_range = user_data['time_range']
     from_seconds = (time_range[0] * 60 + time_range[1]) * 60
@@ -330,8 +410,16 @@ def create_event_series(bot, update, user_data):
 
 
 def cancel(bot, update, user_data):
+    region_id = user_data.get('region_id')
     user_data.clear()
-    return MENU
+    if region_id:
+        user_data['region_id'] = region_id
+    return start(bot, update)
+
+
+def change_region(bot, update, user_data):
+    user_data.clear()
+    return SELECT_REGION
 
 
 def _create_back_to_menu_keyboard():
@@ -355,7 +443,6 @@ def run_bot():
     dp.add_handler(CommandHandler("help", help))
 
     standard_callback_query_handler = CallbackQueryHandler(standard_callback)
-    standard_callback_query_handler2 = CallbackQueryHandler(standard_callback_hide)
 
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
@@ -365,12 +452,18 @@ def run_bot():
                             MessageHandler(Filters.text, set_full_name, pass_user_data=True)],
             SET_PHONE: [EmptyHandler(set_phone_start, pass_user_data=True),
                         MessageHandler(Filters.text, set_phone, pass_user_data=True)],
+            SAVE_PROFILE: [EmptyHandler(save_profile, pass_user_data=True),
+                           standard_callback_query_handler],
+            SELECT_REGION: [EmptyHandler(select_region),
+                            CallbackQueryHandler(select_region_button, pass_user_data=True)],
+            ADD_REGION: [EmptyHandler(add_region_start, pass_user_data=True),
+                         MessageHandler(Filters.text, add_region, pass_user_data=True)],
             SET_ABILITIES: [EmptyHandler(set_abilities, pass_user_data=True),
                             CallbackQueryHandler(set_abilities_button, pass_user_data=True)],
-            SAVE_PROFILE: [EmptyHandler(save_profile, pass_user_data=True),
-                           standard_callback_query_handler2],
-            MENU: [EmptyHandler(show_menu), standard_callback_query_handler],
-            SCHEDULE: [EmptyHandler(show_schedule), standard_callback_query_handler2],
+            SAVE_ABILITIES: [EmptyHandler(save_abilities, pass_user_data=True),
+                             standard_callback_query_handler],
+            MENU: [EmptyHandler(show_menu, pass_user_data=True), standard_callback_query_handler],
+            SCHEDULE: [EmptyHandler(show_schedule, pass_user_data=True), standard_callback_query_handler],
             SET_EVENT_PLACE: [EmptyHandler(set_event_place), standard_callback_query_handler],
             SELECT_EVENT_PLACE: [EmptyHandler(select_event_place, pass_user_data=True),
                                  CallbackQueryHandler(select_event_place_button, pass_user_data=True)],
@@ -386,9 +479,10 @@ def run_bot():
                              MessageHandler(Filters.text, set_event_time, pass_user_data=True),
                              CallbackQueryHandler(set_event_time, pass_user_data=True)],
             CREATE_EVENT_SERIES: [EmptyHandler(create_event_series, pass_user_data=True),
-                                  standard_callback_query_handler2]
+                                  standard_callback_query_handler]
         },
-        fallbacks=[CommandHandler('cancel', cancel, pass_user_data=True)]
+        fallbacks=[CommandHandler('cancel', cancel, pass_user_data=True),
+                   CommandHandler("region", change_region, pass_user_data=True)]
     )
 
     # dp.add_handler(InlineQueryHandler(select_event_place, pass_user_data=True))

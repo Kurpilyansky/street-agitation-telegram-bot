@@ -269,11 +269,9 @@ class ConversationHandler(Handler):
         self._handle_update(update, dispatcher)
         visited = dict()
         while key in self.conversations:
-            state = self.conversations[key]
+            state = self.conversations.get(key)
             handlers = self.states.get(state)
-            if (state in visited
-               or not handlers
-               or not isinstance(handlers[0], EmptyHandler)):
+            if (state in visited) or (not handlers) or (not isinstance(handlers[0], EmptyHandler)):
                 break
             visited[state] = True
             self.current_handler = handlers[0]

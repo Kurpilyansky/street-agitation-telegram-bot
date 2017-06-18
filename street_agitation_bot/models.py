@@ -2,6 +2,29 @@
 
 from django.db import models
 
+from street_agitation_bot import bot_settings
+
+
+class Region(models.Model):
+    name = models.CharField(max_length=100, blank=True, null=True, unique=True)
+    registrations_chat_it = models.IntegerField()
+
+    is_public = models.BooleanField()
+
+    @classmethod
+    def find_by_name(cls, name, user_id=None):
+        region = cls.objects.filter(name=name).first()
+        if region and (region.is_public or bot_settings.is_admin_user_id(user_id)):
+            return region
+        return None
+
+    @classmethod
+    def get_by_id(cls, region_id):
+        return cls.objects.get(id=region_id)
+
+    def __str__(self):
+        return self.name
+
 
 class Agitator(models.Model):
     telegram_id = models.IntegerField(primary_key=True)
@@ -11,11 +34,45 @@ class Agitator(models.Model):
 
     registration_date = models.DateTimeField(auto_now_add=True)
 
+    @property
+    def regions(self):
+        return list(Region.objects.filter(agitatorinregion__agitator__telegram_id=self.telegram_id).all())
+
+    @classmethod
+    def find_by_id(cls, id):
+        return cls.objects.filter(telegram_id=id).first()
+
     def __str__(self):
         return '%s @%s' % (self.full_name, self.telegram)
 
 
+class AgitatorInRegion(models.Model):
+    agitator = models.ForeignKey(Agitator)
+    region = models.ForeignKey(Region)
+
+    have_registration = models.BooleanField(default=False)
+    can_agitate = models.BooleanField(default=False)
+    can_be_applicant = models.BooleanField(default=False)
+    can_deliver = models.BooleanField(default=False)
+    can_hold = models.BooleanField(default=False)
+
+    @classmethod
+    def save_abilities(cls, region_id, agitator_id, abilities):
+        cls.objects.update_or_create(region_id=region_id,
+                                     agitator_id=agitator_id,
+                                     defaults=abilities)
+
+    @classmethod
+    def get(cls, region_id, agitator_id):
+        return cls.objects.filter(region_id=region_id, agitator_id=agitator_id).first()
+
+    class Meta:
+        unique_together = ('agitator', 'region')
+
+
 class AgitationPlace(models.Model):
+    region = models.ForeignKey(Region)
+
     address = models.CharField(max_length=200, help_text='Например, «Гражданский пр., 74»')
     geo_latitude = models.FloatField(null=True, blank=True)
     geo_longitude = models.FloatField(null=True, blank=True)
