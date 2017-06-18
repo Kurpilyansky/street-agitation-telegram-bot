@@ -212,7 +212,7 @@ def show_schedule(bot, update, user_data):
     events = list(models.AgitationEvent.objects.filter(
         start_date__gte=date.today(),
         place__region_id=region_id
-    ))
+    ).select_related('place'))
     if events:
         schedule_text = "\n".join(map(operator.methodcaller("show"), events))
     else:
