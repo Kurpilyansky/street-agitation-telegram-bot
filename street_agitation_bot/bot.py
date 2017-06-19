@@ -39,6 +39,7 @@ SAVE_ABILITIES = 'SAVE_ABILITIES'
 MENU = 'MENU'
 SCHEDULE = 'SCHEDULE'
 APPLY_TO_AGITATE = 'APPLY_TO_AGITATE'
+SHOW_PARTICIPATIONS = 'SHOW_PARTICIPATIONS'
 SET_EVENT_PLACE = 'SET_EVENT_PLACE'
 SELECT_EVENT_PLACE = 'SELECT_EVENT_PLACE'
 SET_PLACE_ADDRESS = 'SET_PLACE_ADDRESS'
@@ -233,6 +234,10 @@ def show_menu(bot, update, user_data):
         keyboard.append([InlineKeyboardButton('Записаться на куб', callback_data=APPLY_TO_AGITATE)])
         region_id = user_data['region_id']
         agitator_id = update.effective_user.id
+        if models.AgitationEventParticipant.objects.filter(
+                                        agitator_id=agitator_id,
+                                        event__start_date__gte=date.today()).exists():
+            keyboard.append([InlineKeyboardButton('Мои кубы', callback_data=SHOW_PARTICIPATIONS)])
         abilities = models.AgitatorInRegion.get(region_id, agitator_id)
         if abilities.is_admin:
             keyboard.append([InlineKeyboardButton('Добавить ивент', callback_data=SET_EVENT_PLACE)])
@@ -257,6 +262,33 @@ def show_schedule(bot, update, user_data, region_id):
         keyboard.inline_keyboard[0:0] = [[InlineKeyboardButton('Записаться на куб', callback_data=APPLY_TO_AGITATE)]]
     send_message_text(bot, update, user_data,
                       schedule_text,
+                      parse_mode="Markdown",
+                      reply_markup=keyboard)
+
+
+@region_decorator
+def show_participations(bot, update, user_data, region_id):
+    region = models.Region.get_by_id(region_id)
+    agitator_id = update.effective_user.id
+    participations = models.AgitationEventParticipant.objects.filter(
+        agitator_id=agitator_id,
+        event__start_date__gte=date.today(),
+    ).select_related('event', 'event__place').all()
+    if participations:
+        lines = list()
+        for p in participations:
+            status = u'\U00002705' if p.approved else (u'\U0000274c' if p.declined else u'\U00002753')
+            line = p.event.show() + " " + status
+            if p.event.place.region_id != region.id:
+                line = '*%s* %s' % (region.name, line)
+            lines.append(line)
+        text = "\n".join(lines)
+    else:
+        text = "Вы не записались ни на один будущий куб"
+    text = "*Ваши кубы*\n" + text
+    keyboard = _create_back_to_menu_keyboard()
+    send_message_text(bot, update, user_data,
+                      text,
                       parse_mode="Markdown",
                       reply_markup=keyboard)
 
@@ -566,6 +598,8 @@ def run_bot():
                              standard_callback_query_handler],
             MENU: [EmptyHandler(show_menu, pass_user_data=True), standard_callback_query_handler],
             SCHEDULE: [EmptyHandler(show_schedule, pass_user_data=True), standard_callback_query_handler],
+            SHOW_PARTICIPATIONS: [EmptyHandler(show_participations, pass_user_data=True),
+                                  standard_callback_query_handler],
             APPLY_TO_AGITATE: [EmptyHandler(apply_to_agitate, pass_user_data=True),
                                CallbackQueryHandler(apply_to_agitate_button, pass_user_data=True)],
             SET_EVENT_PLACE: [EmptyHandler(set_event_place, pass_user_data=True),
