@@ -65,14 +65,20 @@ def delete_inline_keyboard(bot, chat_id, message_id):
         pass  # TODO caused error "Message is not modified"
 
 
-def send_message_text(bot, update, user_data, *args, edit_last=True, **kwargs):
-    if edit_last and update.callback_query:
+def send_message_text(bot, update, user_data, *args, **kwargs):
+    last_bot_message_id = user_data.get('last_bot_message_id')
+    last_bot_message_ts = user_data.get('last_bot_message_ts', 0)
+    user_data.pop('last_bot_message_id', None)
+    user_data.pop('last_bot_message_ts', None)
+    cur_ts = datetime.now().timestamp()
+    if update.callback_query and cur_ts < last_bot_message_ts + 600:
         new_message = update.callback_query.edit_message_text(*args, **kwargs)
     else:
-        if 'last_bot_message_id' in user_data:
-            delete_inline_keyboard(bot, update.effective_chat.id, user_data['last_bot_message_id'])
+        if last_bot_message_id:
+            bot.delete_message(update.effective_chat.id, last_bot_message_id)
         new_message = update.effective_message.reply_text(*args, **kwargs)
     user_data['last_bot_message_id'] = new_message.message_id
+    user_data['last_bot_message_ts'] = cur_ts
 
 
 def standard_callback(bot, update):
@@ -546,12 +552,12 @@ def clear_user_data(user_data, keep_keys=None):
 
 
 def cancel(bot, update, user_data):
-    clear_user_data(user_data, ['last_bot_message_id', 'region_id'])
+    clear_user_data(user_data, ['last_bot_message_id', 'last_bot_message_ts', 'region_id'])
     return start(bot, update)
 
 
 def change_region(bot, update, user_data):
-    clear_user_data(user_data, ['last_bot_message_id'])
+    clear_user_data(user_data, ['last_bot_message_id', 'last_bot_message_ts'])
     return SELECT_REGION
 
 
