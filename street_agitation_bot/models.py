@@ -7,7 +7,7 @@ from street_agitation_bot import bot_settings
 
 class Region(models.Model):
     name = models.CharField(max_length=100, blank=True, null=True, unique=True)
-    registrations_chat_it = models.IntegerField()
+    registrations_chat_it = models.BigIntegerField()
 
     is_public = models.BooleanField()
 
