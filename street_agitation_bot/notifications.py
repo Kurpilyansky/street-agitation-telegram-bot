@@ -1,5 +1,5 @@
 
-from street_agitation_bot import models
+from street_agitation_bot import models, utils
 
 from telegram import (InlineKeyboardButton, InlineKeyboardMarkup)
 
@@ -52,7 +52,7 @@ def notify_about_new_registration(bot, region_id, agitator_id, text):
     agitator = models.Agitator.find_by_id(agitator_id)
     bot.send_message(region.registrations_chat_it,
                      'Новая анкета\nРегион %s\n%s%s'
-                     % (region.name, agitator.show_full(), text),
+                     % (region.show(), agitator.show_full(), text),
                      parse_mode="Markdown")
 
 
@@ -66,6 +66,6 @@ def notify_about_new_participant(bot, event_id, agitator_id):
                 [InlineKeyboardButton('Отклонить', callback_data=PARTICIPANT_DECLINE + str(participant.id))]]
     bot.send_message(region.registrations_chat_it,
                      'Новая заявка на участие\nРегион %s\nКуб %s\nВолонтер %s'
-                     % (region.name, event.show(), agitator.show_full()),
+                     % (region.show(), event.show(), agitator.show_full()),
                      parse_mode='Markdown',
                      reply_markup=InlineKeyboardMarkup(keyboard))

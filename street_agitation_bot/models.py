@@ -2,7 +2,7 @@
 
 from django.db import models
 
-from street_agitation_bot import bot_settings
+from street_agitation_bot import bot_settings, utils
 
 
 class Region(models.Model):
@@ -21,6 +21,9 @@ class Region(models.Model):
     @classmethod
     def get_by_id(cls, region_id):
         return cls.objects.get(id=region_id)
+
+    def show(self):
+        return utils.escape_markdown(self.name)
 
     def __str__(self):
         return self.name
@@ -43,7 +46,7 @@ class Agitator(models.Model):
         return cls.objects.filter(telegram_id=id).first()
 
     def show_full(self):
-        return '%s @%s %s' % (self.full_name, self.telegram, self.phone)
+        return utils.escape_markdown('%s @%s %s' % (self.full_name, self.telegram, self.phone))
 
     def __str__(self):
         return '%s @%s' % (self.full_name, self.telegram)
@@ -103,7 +106,7 @@ class AgitationEvent(models.Model):
     def show(self):
         return "%s-%s, *%s*" % (self.start_date.strftime("%d.%m %H:%M"),
                                 self.end_date.strftime("%H:%M"),
-                                self.place.address)
+                                utils.escape_markdown(self.place.address))
 
     def __str__(self):
         return "%s-%s, %s" % (self.start_date.strftime("%d.%m %H:%M"),
