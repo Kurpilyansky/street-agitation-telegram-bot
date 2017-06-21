@@ -1,5 +1,7 @@
 from street_agitation_bot import bot_settings, models, notifications
 
+import traceback
+
 import operator
 import re
 import collections
@@ -229,11 +231,6 @@ def save_abilities(bot, update, user_data, region_id):
 
 
 def show_menu(bot, update, user_data):
-    if update.callback_query:
-        try:
-            update.callback_query.edit_message_reply_markup(reply_markup=None)
-        except TelegramError:
-            pass  # TODO caused error "Message is not modified"
     keyboard = list()
     if 'region_id' in user_data:
         keyboard.append([InlineKeyboardButton('Расписание', callback_data=SCHEDULE)])
@@ -570,7 +567,12 @@ def help(bot, update):
 
 
 def error_handler(bot, update, error):
-    logger.error('Update "%s" caused error "%s"' % (update, error))
+    logger.error('Update "%s" caused error "%s"' % (update, error), exc_info=1)
+    try:
+        bot.send_message(bot_settings.error_chat_id, 'Update "%s" caused error\n%s' % (update, traceback.format_exc()))
+    except TelegramError as e:
+        logger.error("Can not send message about error to telegram chat %s", e, exc_info=1)
+        pass
 
 
 def run_bot():

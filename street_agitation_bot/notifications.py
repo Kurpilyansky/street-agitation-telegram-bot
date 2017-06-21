@@ -16,6 +16,9 @@ def participant_button(bot, update, groups):
     participant_id = groups[1]
     participant = (models.AgitationEventParticipant.objects.filter(id=participant_id)
                    .select_related('event', 'event__place', 'event__place__region').first())
+    if not participant:
+        query.answer(text='Данная заявка не найдена. Что-то пошло не так :(', show_alert=True)
+        return
     region = participant.event.place.region
     agitator_in_region = models.AgitatorInRegion.get(region.id, update.effective_user.id)
     if not (agitator_in_region and agitator_in_region.is_admin):
