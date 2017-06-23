@@ -103,7 +103,7 @@ def set_last_name_start(bot, update, user_data):
 
 def set_last_name(bot, update, user_data):
     user_data["last_name"] = update.message.text
-    return SET_PHONE
+    return SET_FIRST_NAME
 
 
 def set_first_name_start(bot, update, user_data):
