@@ -135,7 +135,13 @@ def save_profile(bot, update, user_data):
                   'telegram': user.username})
 
     text = 'Спасибо за регистрацию!' if created else 'Данные профиля обновлены'
-    send_message_text(bot, update, user_data, text, reply_markup=_create_back_to_menu_keyboard())
+    if 'region_id' in user_data:
+        keyboard = _create_back_to_menu_keyboard()
+        keyboard.inline_keyboard[0:0] = [[InlineKeyboardButton('Настройки', callback_data=SHOW_PROFILE)]]
+    else:
+        keyboard = InlineKeyboardMarkup([[InlineKeyboardButton('Выбрать регион', callback_data=SELECT_REGION)]])
+    send_message_text(bot, update, user_data, text, reply_markup=keyboard)
+        
 
     del user_data['first_name']
     del user_data['last_name']
@@ -151,7 +157,7 @@ def show_profile(bot, update, user_data, region_id):
         return SET_LAST_NAME
     if not agitator_in_region:
         return SET_ABILITIES
-    profile = 'Фамилия %s\nИмя %s\nТелефон %s' % (agitator.last_name, agitator.first_name, agitator.phone)
+    profile = '*Настройки*\nФамилия %s\nИмя %s\nТелефон %s' % (agitator.last_name, agitator.first_name, agitator.phone)
     abilities = _prepare_abilities_text(agitator_in_region.get_abilities_dict())
     keyboard = _create_back_to_menu_keyboard()
     keyboard.inline_keyboard[0:0] = [[InlineKeyboardButton('Редактировать профиль', callback_data=SET_LAST_NAME)],
@@ -249,10 +255,12 @@ def save_abilities(bot, update, user_data, region_id):
     agitator_id = update.effective_user.id
     text = _prepare_abilities_text(user_data['abilities'])
     obj, created = models.AgitatorInRegion.save_abilities(region_id, agitator_id, user_data['abilities'])
+    keyboard = _create_back_to_menu_keyboard()
+    keyboard.inline_keyboard[0:0] = [[InlineKeyboardButton('Настройки', callback_data=SHOW_PROFILE)]]
     send_message_text(bot, update, user_data,
                       'Данные сохранены' + text,
                       parse_mode="Markdown",
-                      reply_markup=_create_back_to_menu_keyboard())
+                      reply_markup=keyboard)
     if created:
         notifications.notify_about_new_registration(bot, region_id, agitator_id, text)
     del user_data['abilities']
@@ -276,7 +284,7 @@ def show_menu(bot, update, user_data):
                                         agitator_id=agitator_id,
                                         event__start_date__gte=date.today()).exists():
             keyboard.append([InlineKeyboardButton('Мои кубы', callback_data=SHOW_PARTICIPATIONS)])
-        keyboard.append([InlineKeyboardButton('Профиль', callback_data=SHOW_PROFILE)])
+        keyboard.append([InlineKeyboardButton('Настройки', callback_data=SHOW_PROFILE)])
         abilities = models.AgitatorInRegion.get(region_id, agitator_id)
         if abilities.is_admin:
             keyboard.append([InlineKeyboardButton('Добавить ивент', callback_data=SET_EVENT_PLACE)])
