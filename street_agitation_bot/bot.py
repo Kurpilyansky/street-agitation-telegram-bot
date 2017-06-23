@@ -288,7 +288,7 @@ def show_participations(bot, update, user_data, region_id):
     participations = models.AgitationEventParticipant.objects.filter(
         agitator_id=agitator_id,
         event__start_date__gte=date.today(),
-    ).select_related('event', 'event__place').all()
+    ).select_related('event', 'event__place').order_by('event__start_date').all()
     if participations:
         lines = list()
         for p in participations:
@@ -353,6 +353,7 @@ def apply_to_agitate(bot, update, user_data, region_id):
                           '*Вы уже подали заявку на все запланированные кубы. Спасибо вам*',
                           parse_mode="Markdown",
                           reply_markup=keyboard)
+        del user_data['events_offset']
         return
 
     if query_set.count() > offset + EVENT_PAGE_SIZE:
