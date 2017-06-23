@@ -33,6 +33,7 @@ SET_LAST_NAME = 'SET_LAST_NAME'
 SET_FIRST_NAME = 'SET_FIRST_NAME'
 SET_PHONE = 'SET_PHONE'
 SAVE_PROFILE = 'SAVE_PROFILE'
+SHOW_PROFILE = 'SHOW_PROFILE'
 
 SELECT_REGION = 'SELECT_REGION'
 ADD_REGION = 'ADD_REGION'
@@ -141,6 +142,23 @@ def save_profile(bot, update, user_data):
     del user_data['phone']
 
 
+@region_decorator
+def show_profile(bot, update, user_data, region_id):
+    agitator_id = update.effective_user.id
+    agitator = models.Agitator.find_by_id(agitator_id)
+    agitator_in_region = models.AgitatorInRegion.get(region_id, agitator_id)
+    if not agitator:
+        return SET_LAST_NAME
+    if not agitator_in_region:
+        return SET_ABILITIES
+    profile = 'Фамилия %s\nИмя %s\nТелефон %s' % (agitator.last_name, agitator.first_name, agitator.phone)
+    abilities = _prepare_abilities_text(agitator_in_region.get_abilities_dict())
+    keyboard = _create_back_to_menu_keyboard()
+    keyboard.inline_keyboard[0:0] = [[InlineKeyboardButton('Редактировать профиль', callback_data=SET_LAST_NAME)],
+                                     [InlineKeyboardButton('Редактировать «умения»', callback_data=SET_ABILITIES)]]
+    send_message_text(bot, update, user_data, '\n'.join((profile, abilities)), parse_mode='Markdown', reply_markup=keyboard)
+
+
 def select_region(bot, update, user_data):
     agitator = models.Agitator.find_by_id(update.effective_user.id)
     if not agitator:
@@ -229,9 +247,7 @@ def set_abilities_button(bot, update, user_data):
 @region_decorator
 def save_abilities(bot, update, user_data, region_id):
     agitator_id = update.effective_user.id
-    text = ''
-    for key, val in user_data['abilities'].items():
-        text += "\n%s: %s" % (ABILITIES_TEXTS[key], "*да*" if val else "нет")
+    text = _prepare_abilities_text(user_data['abilities'])
     obj, created = models.AgitatorInRegion.save_abilities(region_id, agitator_id, user_data['abilities'])
     send_message_text(bot, update, user_data,
                       'Данные сохранены' + text,
@@ -240,6 +256,13 @@ def save_abilities(bot, update, user_data, region_id):
     if created:
         notifications.notify_about_new_registration(bot, region_id, agitator_id, text)
     del user_data['abilities']
+
+
+def _prepare_abilities_text(abilities):
+    text = ''
+    for key, val in abilities.items():
+        text += "\n%s: %s" % (ABILITIES_TEXTS[key], "*да*" if val else "нет")
+    return text
 
 
 def show_menu(bot, update, user_data):
@@ -253,6 +276,7 @@ def show_menu(bot, update, user_data):
                                         agitator_id=agitator_id,
                                         event__start_date__gte=date.today()).exists():
             keyboard.append([InlineKeyboardButton('Мои кубы', callback_data=SHOW_PARTICIPATIONS)])
+        keyboard.append([InlineKeyboardButton('Профиль', callback_data=SHOW_PROFILE)])
         abilities = models.AgitatorInRegion.get(region_id, agitator_id)
         if abilities.is_admin:
             keyboard.append([InlineKeyboardButton('Добавить ивент', callback_data=SET_EVENT_PLACE)])
@@ -628,6 +652,8 @@ def run_bot():
             SET_PHONE: [EmptyHandler(set_phone_start, pass_user_data=True),
                         MessageHandler(Filters.text, set_phone, pass_user_data=True)],
             SAVE_PROFILE: [EmptyHandler(save_profile, pass_user_data=True),
+                           standard_callback_query_handler],
+            SHOW_PROFILE: [EmptyHandler(show_profile, pass_user_data=True),
                            standard_callback_query_handler],
             SELECT_REGION: [EmptyHandler(select_region, pass_user_data=True),
                             CallbackQueryHandler(select_region_button, pass_user_data=True)],

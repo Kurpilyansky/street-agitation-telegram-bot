@@ -78,6 +78,13 @@ class AgitatorInRegion(models.Model):
                                             agitator_id=agitator_id,
                                             defaults=abilities)
 
+    def get_abilities_dict(self):
+        return {'have_registration': self.have_registration,
+                'can_agitate': self.can_agitate,
+                'can_be_applicant': self.can_be_applicant,
+                'can_deliver': self.can_deliver,
+                'can_hold': self.can_hold}
+
     @classmethod
     def get(cls, region_id, agitator_id):
         return cls.objects.filter(region_id=region_id, agitator_id=agitator_id).first()
