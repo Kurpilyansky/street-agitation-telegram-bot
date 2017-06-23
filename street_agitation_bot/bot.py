@@ -29,7 +29,8 @@ TRASH = 'TRASH'
 SKIP = 'SKIP'
 END = 'END'
 
-SET_FULL_NAME = 'SET_FULL_NAME'
+SET_LAST_NAME = 'SET_LAST_NAME'
+SET_FIRST_NAME = 'SET_FIRST_NAME'
 SET_PHONE = 'SET_PHONE'
 SAVE_PROFILE = 'SAVE_PROFILE'
 
@@ -93,15 +94,24 @@ def start(bot, update):
     if models.Agitator.objects.filter(telegram_id=update.effective_user.id).exists():
         return MENU
     else:
-        return SET_FULL_NAME
+        return SET_LAST_NAME
 
 
-def set_full_name_start(bot, update, user_data):
+def set_last_name_start(bot, update, user_data):
+    send_message_text(bot, update, user_data, 'Укажите вашу фамилию')
+
+
+def set_last_name(bot, update, user_data):
+    user_data["last_name"] = update.message.text
+    return SET_PHONE
+
+
+def set_first_name_start(bot, update, user_data):
     send_message_text(bot, update, user_data, 'Укажите ваше имя')
 
 
-def set_full_name(bot, update, user_data):
-    user_data["full_name"] = update.message.text
+def set_first_name(bot, update, user_data):
+    user_data["first_name"] = update.message.text
     return SET_PHONE
 
 
@@ -116,24 +126,25 @@ def set_phone(bot, update, user_data):
 
 def save_profile(bot, update, user_data):
     user = update.effective_user
-    username = user.username if hasattr(user, 'username') else None
     agitator, created = models.Agitator.objects.update_or_create(
-                                telegram_id=user.id,
-                                defaults={'full_name': user_data.get('full_name'),
-                                          'phone': user_data.get('phone'),
-                                          'telegram': username})
+        telegram_id=user.id,
+        defaults={'first_name': user_data.get('first_name'),
+                  'last_name': user_data.get('last_name'),
+                  'phone': user_data.get('phone'),
+                  'telegram': user.username})
 
     text = 'Спасибо за регистрацию!' if created else 'Данные профиля обновлены'
     send_message_text(bot, update, user_data, text, reply_markup=_create_back_to_menu_keyboard())
 
-    del user_data['full_name']
+    del user_data['first_name']
+    del user_data['last_name']
     del user_data['phone']
 
 
 def select_region(bot, update, user_data):
     agitator = models.Agitator.find_by_id(update.effective_user.id)
     if not agitator:
-        return SET_FULL_NAME
+        return SET_LAST_NAME
     regions = agitator.regions
     if not regions:
         return ADD_REGION
@@ -591,8 +602,10 @@ def run_bot():
         entry_points=[CommandHandler("start", start)],
 
         states={
-            SET_FULL_NAME: [EmptyHandler(set_full_name_start, pass_user_data=True),
-                            MessageHandler(Filters.text, set_full_name, pass_user_data=True)],
+            SET_LAST_NAME: [EmptyHandler(set_last_name_start, pass_user_data=True),
+                            MessageHandler(Filters.text, set_last_name, pass_user_data=True)],
+            SET_FIRST_NAME: [EmptyHandler(set_first_name_start, pass_user_data=True),
+                            MessageHandler(Filters.text, set_first_name, pass_user_data=True)],
             SET_PHONE: [EmptyHandler(set_phone_start, pass_user_data=True),
                         MessageHandler(Filters.text, set_phone, pass_user_data=True)],
             SAVE_PROFILE: [EmptyHandler(save_profile, pass_user_data=True),

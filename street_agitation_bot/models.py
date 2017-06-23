@@ -32,10 +32,15 @@ class Region(models.Model):
 class Agitator(models.Model):
     telegram_id = models.IntegerField(primary_key=True)
     telegram = models.CharField(max_length=100, blank=True, null=True)
-    full_name = models.CharField(max_length=200, blank=False, null=False)
+    first_name = models.CharField(max_length=200, blank=False, null=False)
+    last_name = models.CharField(max_length=200, blank=False, null=False)
     phone = models.CharField(max_length=50, blank=False, null=False)
 
     registration_date = models.DateTimeField(auto_now_add=True)
+
+    @property
+    def full_name(self):
+        return "%s %s" % (self.last_name, self.first_name)
 
     @property
     def regions(self):
