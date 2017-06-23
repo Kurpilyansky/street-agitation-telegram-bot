@@ -26,7 +26,8 @@ class AgitatorAdmin(VersionAdmin):
     list_display = (
         'telegram_id',
         'telegram',
-        'full_name',
+        'last_name',
+        'first_name',
         'phone',
     )
 
@@ -36,7 +37,8 @@ class AgitatorAdmin(VersionAdmin):
     search_fields = (
         '=id',
         'telegram',
-        'full_name',
+        'last_name',
+        'first_name',
     )
 
 
@@ -119,7 +121,8 @@ class AgitationEventParticipantAdmin(VersionAdmin):
 
     search_fields = (
         '=id',
-        'agitator__full_name',
+        'agitator__last_name',
+        'agitator__first_name',
     )
 
 
