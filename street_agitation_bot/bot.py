@@ -44,6 +44,7 @@ MENU = 'MENU'
 SCHEDULE = 'SCHEDULE'
 APPLY_TO_AGITATE = 'APPLY_TO_AGITATE'
 SHOW_PARTICIPATIONS = 'SHOW_PARTICIPATIONS'
+MANAGE_EVENTS = 'MANAGE_EVENTS'
 SET_EVENT_PLACE = 'SET_EVENT_PLACE'
 SELECT_EVENT_PLACE = 'SELECT_EVENT_PLACE'
 SET_PLACE_ADDRESS = 'SET_PLACE_ADDRESS'
@@ -57,7 +58,7 @@ def region_decorator(func):
     def wrapper(bot, update, user_data, *args, **kwargs):
         if 'region_id' not in user_data:
             return change_region(bot, update, user_data)
-        return func(bot, update, user_data, region_id=user_data['region_id'], *args, **kwargs)
+        return func(bot, update, user_data, region_id=int(user_data['region_id']), *args, **kwargs)
 
     return wrapper
 
@@ -141,7 +142,6 @@ def save_profile(bot, update, user_data):
     else:
         keyboard = InlineKeyboardMarkup([[InlineKeyboardButton('Выбрать регион', callback_data=SELECT_REGION)]])
     send_message_text(bot, update, user_data, text, reply_markup=keyboard)
-        
 
     del user_data['first_name']
     del user_data['last_name']
@@ -288,6 +288,7 @@ def show_menu(bot, update, user_data):
         abilities = models.AgitatorInRegion.get(region_id, agitator_id)
         if abilities.is_admin:
             keyboard.append([InlineKeyboardButton('Добавить ивент', callback_data=SET_EVENT_PLACE)])
+            keyboard.append([InlineKeyboardButton('Заявки на кубы', callback_data=MANAGE_EVENTS)])
     else:
         keyboard.append([InlineKeyboardButton('Выбрать регион', callback_data=SELECT_REGION)])
     send_message_text(bot, update, user_data, '*Меню*\nВыберите действие для продолжения работы', parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
@@ -312,7 +313,6 @@ def show_schedule(bot, update, user_data, region_id):
                       parse_mode="Markdown",
                       reply_markup=keyboard)
 
-
 @region_decorator
 def show_participations(bot, update, user_data, region_id):
     region = models.Region.get_by_id(region_id)
@@ -320,14 +320,14 @@ def show_participations(bot, update, user_data, region_id):
     participations = models.AgitationEventParticipant.objects.filter(
         agitator_id=agitator_id,
         event__start_date__gte=date.today(),
-    ).select_related('event', 'event__place').order_by('event__start_date').all()
+    ).select_related('event', 'event__place', 'event__place__region').order_by('event__start_date').all()
     if participations:
         lines = list()
         for p in participations:
             status = u'\U00002705' if p.approved else (u'\U0000274c' if p.declined else u'\U00002753')
             line = p.event.show() + " " + status
             if p.event.place.region_id != region.id:
-                line = '*%s* %s' % (region.name, line)
+                line = '*%s* %s' % (p.event.place.region.name, line)
             lines.append(line)
         text = "\n".join(lines)
     else:
@@ -340,6 +340,85 @@ def show_participations(bot, update, user_data, region_id):
                       reply_markup=keyboard)
 
 EVENT_PAGE_SIZE = 5
+
+
+@region_decorator
+def manage_events(bot, update, user_data, region_id):
+    agitator_id = update.effective_user.id
+    abilities = models.AgitatorInRegion.get(region_id, agitator_id)
+    if not abilities or not abilities.is_admin:
+        return MENU
+
+    if 'event_id' in user_data:
+        event = models.AgitationEvent.objects.filter(id=user_data['event_id']).first()
+        if event:
+            applications = list(models.AgitationEventParticipant.objects.filter(event_id=user_data['event_id']).all())
+            keyboard = list()
+            if applications:
+                lines = list()
+                for a in applications:
+                    status = u'\U00002705' if a.approved else (u'\U0000274c' if a.declined else u'\U00002753')
+                    line = status + " " + a.agitator.show_full()
+                    lines.append(line)
+                    keyboard.append([InlineKeyboardButton(u'\U00002705 ' + a.agitator.full_name, callback_data=YES + str(a.id)),
+                                     InlineKeyboardButton(u'\U0000274c ' + a.agitator.full_name, callback_data=NO + str(a.id))])
+                text = '\n'.join(lines)
+            else:
+                text = "Никто не записался на этот куб :("
+            keyboard.append([InlineKeyboardButton('Назад', callback_data=BACK)])
+
+            send_message_text(bot, update, user_data,
+                              event.show() + '\n\n' + text,
+                              parse_mode="Markdown",
+                              reply_markup=InlineKeyboardMarkup(keyboard))
+            return
+        else:
+            del user_data['event_id']
+
+    if 'events_offset' not in user_data:
+        user_data['events_offset'] = 0
+
+    offset = user_data['events_offset']
+    query_set = models.AgitationEvent.objects.filter(start_date__gte=date.today(), place__region_id=region_id)
+    events = list(query_set.select_related('place')[offset:offset + EVENT_PAGE_SIZE])
+    keyboard = list()
+    if offset > 0:
+        keyboard.append([InlineKeyboardButton('Назад', callback_data=BACK)])
+    for event in events:
+        keyboard.append([InlineKeyboardButton(event.show(markdown=False), callback_data=str(event.id))])
+    if query_set.count() > offset + EVENT_PAGE_SIZE:
+        keyboard.append([InlineKeyboardButton('Вперед', callback_data=FORWARD)])
+    keyboard.append([InlineKeyboardButton('<< Меню', callback_data=MENU)])
+    send_message_text(bot, update, user_data,
+                      '*Выберите куб*',
+                      parse_mode="Markdown",
+                      reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+def manage_events_button(bot, update, user_data):
+    query = update.callback_query
+    query.answer()
+    if query.data == BACK:
+        if 'event_id' in user_data:
+            del user_data['event_id']
+        else:
+            user_data['events_offset'] -= EVENT_PAGE_SIZE
+    elif query.data == FORWARD:
+        user_data['events_offset'] += EVENT_PAGE_SIZE
+    elif query.data in [MENU]:
+        return query.data
+    else:
+        match = re.match('^\d+$', query.data)
+        if bool(match):
+            user_data['event_id'] = int(query.data)
+        else:
+            match = re.match('^(%s|%s)(\d+)$' % (YES, NO), query.data)
+            if bool(match):
+                participant_id = int(match.group(2))
+                if match.group(1) == YES:
+                    models.AgitationEventParticipant.approve(participant_id)
+                elif match.group(1) == NO:
+                    models.AgitationEventParticipant.decline(participant_id)
 
 
 @region_decorator
@@ -577,7 +656,7 @@ def create_event_series(bot, update, user_data, region_id):
         del user_data['address']
         del user_data['location']
 
-    if place.region_id != region_id:
+    if str(place.region_id) != str(region_id):
         return cancel(bot, update, user_data)
 
     time_range = user_data['time_range']
@@ -675,6 +754,8 @@ def run_bot():
             SCHEDULE: [EmptyHandler(show_schedule, pass_user_data=True), standard_callback_query_handler],
             SHOW_PARTICIPATIONS: [EmptyHandler(show_participations, pass_user_data=True),
                                   standard_callback_query_handler],
+            MANAGE_EVENTS: [EmptyHandler(manage_events, pass_user_data=True),
+                            CallbackQueryHandler(manage_events_button, pass_user_data=True)],
             APPLY_TO_AGITATE: [EmptyHandler(apply_to_agitate, pass_user_data=True),
                                CallbackQueryHandler(apply_to_agitate_button, pass_user_data=True)],
             SET_EVENT_PLACE: [EmptyHandler(set_event_place, pass_user_data=True),
