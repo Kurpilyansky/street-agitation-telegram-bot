@@ -129,6 +129,7 @@ class AgitationEventParticipantAdmin(VersionAdmin):
 class ConversationStateAdmin(VersionAdmin):
     list_display = (
         'key',
+        'agitator',
         'state',
     )
     list_filter = (

@@ -281,7 +281,7 @@ class ConversationHandler(Handler):
             visited[state] = True
             self.current_handler = handlers[0]
             self._handle_update(update, dispatcher)
-        self._save_state(key, dispatcher)
+        self._save_state(key, dispatcher, update.effective_user.id)
 
     def update_state(self, new_state, key):
         if new_state == self.END:
@@ -306,8 +306,10 @@ class ConversationHandler(Handler):
             else:
                 self._state_in_database[key] = models.ConversationState(key=key)
 
-    def _save_state(self, key, dispatcher):
+    def _save_state(self, key, dispatcher, agitator_id):
         state_in_database = self._state_in_database.get(key, models.ConversationState(key=key))
+        if models.Agitator.find_by_id(agitator_id):
+            state_in_database.agitator_id = agitator_id
         state_in_database.state = self.conversations.get(key)
         state_in_database.data = json.dumps(dispatcher.user_data.get(key))
         state_in_database.save()
