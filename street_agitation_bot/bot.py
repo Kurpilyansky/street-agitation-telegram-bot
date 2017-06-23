@@ -211,7 +211,7 @@ def set_abilities(bot, update, user_data):
         ])
     keyboard = list()
     for key, val in user_data['abilities'].items():
-        text = ("+ " if val else "") + ABILITIES_TEXTS[key]
+        text = (u'\U00002705 ' if val else "") + ABILITIES_TEXTS[key]
         keyboard.append([InlineKeyboardButton(text, callback_data=key)])
     keyboard.append([InlineKeyboardButton('-- Закончить выбор --', callback_data=END)])
     send_message_text(bot, update, user_data, 'Чем вы готовы помочь?', reply_markup=InlineKeyboardMarkup(keyboard))
