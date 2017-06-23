@@ -319,7 +319,7 @@ def apply_to_agitate(bot, update, user_data, region_id):
                          InlineKeyboardButton('Нет', callback_data=NO)]]
             send_message_text(bot, update, user_data,
                               '*Подтвердите, что ваш выбор*\n'
-                              'Вы хотитие волонтерить на кубе %s?' % event.show(),
+                              'Вы хотите агитировать на кубе %s?' % event.show(),
                               parse_mode="Markdown",
                               reply_markup=InlineKeyboardMarkup(keyboard))
             return
@@ -329,14 +329,32 @@ def apply_to_agitate(bot, update, user_data, region_id):
     if 'events_offset' not in user_data:
         user_data['events_offset'] = 0
 
+    agitator_id = update.effective_user.id
     offset = user_data['events_offset']
     query_set = models.AgitationEvent.objects.filter(start_date__gte=date.today(), place__region_id=region_id)
     events = list(query_set.select_related('place')[offset:offset + EVENT_PAGE_SIZE])
+    participations = list(models.AgitationEventParticipant.objects.filter(
+        agitator_id=agitator_id,
+        event__start_date__gte=date.today(),
+        event__place__region_id=region_id).all())
+    exclude_event_ids = {p.event_id: True for p in participations}
     keyboard = list()
     if offset > 0:
         keyboard.append([InlineKeyboardButton('Назад', callback_data=BACK)])
+    any_event = False
     for event in events:
-        keyboard.append([InlineKeyboardButton(event.show(), callback_data=str(event.id))])
+        if event.id not in exclude_event_ids:
+            any_event = True
+            keyboard.append([InlineKeyboardButton(event.show(markdown=False), callback_data=str(event.id))])
+    if not any_event:
+        keyboard = _create_back_to_menu_keyboard()
+        keyboard.inline_keyboard[0:0] = [[InlineKeyboardButton('Мои кубы', callback_data=SHOW_PARTICIPATIONS)]]
+        send_message_text(bot, update, user_data,
+                          '*Вы уже подали заявку на все запланированные кубы. Спасибо вам*',
+                          parse_mode="Markdown",
+                          reply_markup=keyboard)
+        return
+
     if query_set.count() > offset + EVENT_PAGE_SIZE:
         keyboard.append([InlineKeyboardButton('Вперед', callback_data=FORWARD)])
     keyboard.append([InlineKeyboardButton('<< Меню', callback_data=MENU)])
@@ -362,8 +380,8 @@ def apply_to_agitate_button(bot, update, user_data):
         if created:
             notifications.notify_about_new_participant(bot, event_id, agitator_id)
         del user_data['event_id']
-    elif query.data == MENU:
-        return MENU
+    elif query.data in [MENU, SHOW_PARTICIPATIONS]:
+        return query.data
     else:
         match = re.match('^\d+$', query.data)
         if bool(match):

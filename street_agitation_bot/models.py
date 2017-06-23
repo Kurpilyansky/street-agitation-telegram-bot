@@ -111,10 +111,15 @@ class AgitationEvent(models.Model):
     class Meta:
         ordering = ['start_date', 'place_id']
 
-    def show(self):
-        return "%s-%s, *%s*" % (self.start_date.strftime("%d.%m %H:%M"),
-                                self.end_date.strftime("%H:%M"),
-                                utils.escape_markdown(self.place.address))
+    def show(self, markdown=True):
+        if markdown:
+            return "%s-%s, *%s*" % (self.start_date.strftime("%d.%m %H:%M"),
+                                    self.end_date.strftime("%H:%M"),
+                                    utils.escape_markdown(self.place.address))
+        else:
+            return "%s-%s, %s" % (self.start_date.strftime("%d.%m %H:%M"),
+                                  self.end_date.strftime("%H:%M"),
+                                  self.place.address)
 
     def __str__(self):
         return "%s-%s, %s" % (self.start_date.strftime("%d.%m %H:%M"),
