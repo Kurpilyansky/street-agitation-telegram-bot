@@ -116,11 +116,12 @@ def set_phone(bot, update, user_data):
 
 def save_profile(bot, update, user_data):
     user = update.effective_user
+    username = user.username if hasattr(user, 'username') else None
     agitator, created = models.Agitator.objects.update_or_create(
                                 telegram_id=user.id,
                                 defaults={'full_name': user_data.get('full_name'),
                                           'phone': user_data.get('phone'),
-                                          'telegram': user.username})
+                                          'telegram': username})
 
     text = 'Спасибо за регистрацию!' if created else 'Данные профиля обновлены'
     send_message_text(bot, update, user_data, text, reply_markup=_create_back_to_menu_keyboard())

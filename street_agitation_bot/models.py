@@ -31,7 +31,7 @@ class Region(models.Model):
 
 class Agitator(models.Model):
     telegram_id = models.IntegerField(primary_key=True)
-    telegram = models.CharField(max_length=100, blank=False, null=False)
+    telegram = models.CharField(max_length=100, blank=True, null=True)
     full_name = models.CharField(max_length=200, blank=False, null=False)
     phone = models.CharField(max_length=50, blank=False, null=False)
 
@@ -46,10 +46,13 @@ class Agitator(models.Model):
         return cls.objects.filter(telegram_id=id).first()
 
     def show_full(self):
-        return utils.escape_markdown('%s @%s %s' % (self.full_name, self.telegram, self.phone))
+        if self.telegram:
+            return utils.escape_markdown('%s @%s %s' % (self.full_name, self.telegram, self.phone))
+        else:
+            return utils.escape_markdown('@%s (%s) %s' % (self.telegram_id, self.full_name, self.phone))
 
     def __str__(self):
-        return '%s @%s' % (self.full_name, self.telegram)
+        return '@%s (%s) @%s' % (self.telegram_id, self.full_name, self.telegram)
 
 
 class AgitatorInRegion(models.Model):
