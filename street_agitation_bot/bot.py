@@ -41,6 +41,7 @@ SET_ABILITIES = 'SET_ABILITIES'
 SAVE_ABILITIES = 'SAVE_ABILITIES'
 
 MENU = 'MENU'
+MAKE_BROADCAST = 'MAKE_BROADCAST'
 SCHEDULE = 'SCHEDULE'
 APPLY_TO_AGITATE = 'APPLY_TO_AGITATE'
 SHOW_PARTICIPATIONS = 'SHOW_PARTICIPATIONS'
@@ -289,9 +290,28 @@ def show_menu(bot, update, user_data):
         if abilities.is_admin:
             keyboard.append([InlineKeyboardButton('Добавить ивент', callback_data=SET_EVENT_PLACE)])
             keyboard.append([InlineKeyboardButton('Заявки на кубы', callback_data=MANAGE_EVENTS)])
+        if bot_settings.is_admin_user_id(agitator_id):
+            keyboard.append([InlineKeyboardButton('Сделать рассылку', callback_data=MAKE_BROADCAST)])
     else:
         keyboard.append([InlineKeyboardButton('Выбрать регион', callback_data=SELECT_REGION)])
     send_message_text(bot, update, user_data, '*Меню*\nВыберите действие для продолжения работы', parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+def make_broadcast_start(bot, update, user_data):
+    send_message_text(bot, update, user_data,
+                      '*Отправьте сообщение, и оно будет отправлено всем пользователям*',
+                      parse_mode='Markdown')
+
+
+def make_broadcast(bot, update):
+    errors = list()
+    for a in models.Agitator.objects.all():
+        try:
+            bot.send_message(a.telegram_id, update.message.text)
+        except TelegramError as e:
+            logger.error(e, exc_info=1)
+            errors.append(e)
+    return MENU
 
 
 @region_decorator
@@ -656,7 +676,7 @@ def create_event_series(bot, update, user_data, region_id):
         del user_data['address']
         del user_data['location']
 
-    if str(place.region_id) != str(region_id):
+    if place.region_id != region_id:
         return cancel(bot, update, user_data)
 
     time_range = user_data['time_range']
@@ -751,6 +771,8 @@ def run_bot():
             SAVE_ABILITIES: [EmptyHandler(save_abilities, pass_user_data=True),
                              standard_callback_query_handler],
             MENU: [EmptyHandler(show_menu, pass_user_data=True), standard_callback_query_handler],
+            MAKE_BROADCAST: [EmptyHandler(make_broadcast_start, pass_user_data=True),
+                             MessageHandler(Filters.text, make_broadcast)],
             SCHEDULE: [EmptyHandler(show_schedule, pass_user_data=True), standard_callback_query_handler],
             SHOW_PARTICIPATIONS: [EmptyHandler(show_participations, pass_user_data=True),
                                   standard_callback_query_handler],
