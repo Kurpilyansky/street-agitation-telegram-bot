@@ -44,6 +44,7 @@ MENU = 'MENU'
 MAKE_BROADCAST = 'MAKE_BROADCAST'
 SCHEDULE = 'SCHEDULE'
 APPLY_TO_AGITATE = 'APPLY_TO_AGITATE'
+APPLY_TO_AGITATE_PLACE = 'APPLY_TO_AGITATE_PLACE'
 SHOW_PARTICIPATIONS = 'SHOW_PARTICIPATIONS'
 MANAGE_EVENTS = 'MANAGE_EVENTS'
 SET_EVENT_PLACE = 'SET_EVENT_PLACE'
@@ -321,7 +322,7 @@ def show_schedule(bot, update, user_data, region_id):
         place__region_id=region_id
     ).select_related('place'))
     if events:
-        schedule_text = "\n".join(map(operator.methodcaller("show"), events))
+        schedule_text = "\n".join(['%s %s' % (e.show(), e.place.show()) for e in events])
     else:
         schedule_text = "В ближайшее время пока ничего не запланировано"
     schedule_text = "*Расписание*\n" + schedule_text
@@ -443,20 +444,6 @@ def manage_events_button(bot, update, user_data):
 
 @region_decorator
 def apply_to_agitate(bot, update, user_data, region_id):
-    if 'event_id' in user_data:
-        event = models.AgitationEvent.objects.filter(id=user_data['event_id']).first()
-        if event:
-            keyboard = [[InlineKeyboardButton('Да', callback_data=YES),
-                         InlineKeyboardButton('Нет', callback_data=NO)]]
-            send_message_text(bot, update, user_data,
-                              '*Подтвердите, что ваш выбор*\n'
-                              'Вы хотите агитировать на кубе %s?' % event.show(),
-                              parse_mode="Markdown",
-                              reply_markup=InlineKeyboardMarkup(keyboard))
-            return
-        else:
-            del user_data['event_id']
-
     if 'events_offset' not in user_data:
         user_data['events_offset'] = 0
 
@@ -503,21 +490,50 @@ def apply_to_agitate_button(bot, update, user_data):
         user_data['events_offset'] -= EVENT_PAGE_SIZE
     elif query.data == FORWARD:
         user_data['events_offset'] += EVENT_PAGE_SIZE
-    elif query.data == NO:
-        del user_data['event_id']
-    elif query.data == YES:
-        event_id = user_data['event_id']
-        agitator_id = update.effective_user.id
-        created = models.AgitationEventParticipant.create(agitator_id, event_id)
-        if created:
-            notifications.notify_about_new_participant(bot, event_id, agitator_id)
-        del user_data['event_id']
     elif query.data in [MENU, SHOW_PARTICIPATIONS]:
         return query.data
     else:
         match = re.match('^\d+$', query.data)
         if bool(match):
-            user_data['event_id'] = int(query.data)
+            event_id = int(query.data)
+            user_data['event_id'] = event_id
+            return APPLY_TO_AGITATE_PLACE
+
+
+@region_decorator
+def apply_to_agitate_place(bot, update, user_data, region_id):
+    event = models.AgitationEvent.objects.filter(id=user_data['event_id']).first()
+    if event:
+        user_data['place_id'] = event.place_id
+        keyboard = [[InlineKeyboardButton('Да', callback_data=YES),
+                     InlineKeyboardButton('Нет', callback_data=NO)]]
+        send_message_text(bot, update, user_data,
+                          '*Подтвердите, что ваш выбор*\n'
+                          'Вы хотите агитировать на кубе %s?' % event.show(),
+                          parse_mode="Markdown",
+                          reply_markup=InlineKeyboardMarkup(keyboard))
+        return
+    else:
+        del user_data['event_id']
+        return APPLY_TO_AGITATE
+
+
+def apply_to_agitate_place_button(bot, update, user_data):
+    query = update.callback_query
+    query.answer()
+    if query.data == NO:
+        del user_data['event_id']
+        return APPLY_TO_AGITATE
+    elif query.data == YES:
+        event_id = user_data['event_id']
+        place_id = user_data['place_id']
+        agitator_id = update.effective_user.id
+        created = models.AgitationEventParticipant.create(agitator_id, event_id, place_id)
+        if created:
+            notifications.notify_about_new_participant(bot, event_id, place_id, agitator_id)
+        del user_data['event_id']
+        del user_data['place_id']
+        return APPLY_TO_AGITATE
 
 
 def set_event_place(bot, update, user_data):
@@ -692,12 +708,13 @@ def create_event_series(bot, update, user_data, region_id):
         event_datetime = datetime.combine(event_date, datetime.min.time())
         event = models.AgitationEvent(
             place=place,
+            name='Куб',
             start_date=event_datetime + timedelta(seconds=from_seconds),
             end_date=event_datetime + timedelta(seconds=to_seconds),
         )
         event.save()
         events.append(event)
-    text = "\n".join(["Добавлено:"] + list(map(operator.methodcaller("show"), events)))
+    text = "\n".join(["Добавлено:"] + ['%s %s' % (e.show(), place.show()) for e in events])
     send_message_text(bot, update, user_data, text, parse_mode="Markdown", reply_markup=_create_back_to_menu_keyboard())
 
     del user_data['dates']
@@ -780,6 +797,8 @@ def run_bot():
                             CallbackQueryHandler(manage_events_button, pass_user_data=True)],
             APPLY_TO_AGITATE: [EmptyHandler(apply_to_agitate, pass_user_data=True),
                                CallbackQueryHandler(apply_to_agitate_button, pass_user_data=True)],
+            APPLY_TO_AGITATE_PLACE: [EmptyHandler(apply_to_agitate_place, pass_user_data=True),
+                                     CallbackQueryHandler(apply_to_agitate_place_button, pass_user_data=True)],
             SET_EVENT_PLACE: [EmptyHandler(set_event_place, pass_user_data=True),
                               standard_callback_query_handler],
             SELECT_EVENT_PLACE: [EmptyHandler(select_event_place, pass_user_data=True),

@@ -22,8 +22,11 @@ class Region(models.Model):
     def get_by_id(cls, region_id):
         return cls.objects.get(id=region_id)
 
-    def show(self):
-        return utils.escape_markdown(self.name)
+    def show(self, markdown=True):
+        if markdown:
+            return utils.escape_markdown(self.name)
+        else:
+            return self.name
 
     def __str__(self):
         return self.name
@@ -102,12 +105,19 @@ class AgitationPlace(models.Model):
 
     last_update_time = models.DateTimeField(auto_now=True)
 
+    def show(self, markdown=True):
+        if markdown:
+            return '*%s*' % utils.escape_markdown(self.address)
+        else:
+            return self.address
+
     def __str__(self):
         return self.address
 
 
 class AgitationEvent(models.Model):
     place = models.ForeignKey(AgitationPlace)
+    name = models.CharField(max_length=100, blank=True, null=True)
     start_date = models.DateTimeField(null=False)
     end_date = models.DateTimeField(null=False)
 
@@ -120,18 +130,19 @@ class AgitationEvent(models.Model):
 
     def show(self, markdown=True):
         if markdown:
-            return "%s-%s, *%s*" % (self.start_date.strftime("%d.%m %H:%M"),
-                                    self.end_date.strftime("%H:%M"),
-                                    utils.escape_markdown(self.place.address))
+            return "%s-%s, %s" % (self.start_date.strftime("%d.%m %H:%M"),
+                                  self.end_date.strftime("%H:%M"),
+                                  utils.escape_markdown(self.name))
         else:
             return "%s-%s, %s" % (self.start_date.strftime("%d.%m %H:%M"),
                                   self.end_date.strftime("%H:%M"),
-                                  self.place.address)
+                                  self.name)
 
     def __str__(self):
-        return "%s-%s, %s" % (self.start_date.strftime("%d.%m %H:%M"),
-                              self.end_date.strftime("%H:%M"),
-                              self.place.address)
+        return "%s-%s, %s %s" % (self.start_date.strftime("%d.%m %H:%M"),
+                                 self.end_date.strftime("%H:%M"),
+                                 self.name,
+                                 self.place.address)
 
 
 class ConversationState(models.Model):
@@ -158,14 +169,15 @@ class ConversationState(models.Model):
 class AgitationEventParticipant(models.Model):
     agitator = models.ForeignKey(Agitator)
     event = models.ForeignKey(AgitationEvent)
+    place = models.ForeignKey(AgitationPlace, null=True)
 
     approved = models.BooleanField(default=False)
     declined = models.BooleanField(default=False)
     canceled = models.BooleanField(default=False)
 
     @classmethod
-    def create(cls, agitator_id, event_id):
-        obj, created = cls.objects.update_or_create(agitator_id=agitator_id, event_id=event_id)
+    def create(cls, agitator_id, event_id, place_id):
+        obj, created = cls.objects.update_or_create(agitator_id=agitator_id, event_id=event_id, place_id=place_id)
         return created
 
     @classmethod

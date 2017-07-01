@@ -59,16 +59,17 @@ def notify_about_new_registration(bot, region_id, agitator_id, text):
                      parse_mode="Markdown")
 
 
-def notify_about_new_participant(bot, event_id, agitator_id):
+def notify_about_new_participant(bot, event_id, place_id, agitator_id):
     agitator = models.Agitator.find_by_id(agitator_id)
     event = (models.AgitationEvent.objects.filter(id=event_id)
              .select_related('place', 'place__region').first())
+    place = models.AgitationPlace.objects.filter(id=place_id).first()
     participant = models.AgitationEventParticipant.get(agitator_id, event.id)
     region = event.place.region
     keyboard = [[InlineKeyboardButton('Подтвердить', callback_data=PARTICIPANT_CONFIRM + str(participant.id))],
                 [InlineKeyboardButton('Отклонить', callback_data=PARTICIPANT_DECLINE + str(participant.id))]]
     bot.send_message(region.registrations_chat_it,
-                     'Новая заявка на участие\nРегион %s\nКуб %s\nВолонтер %s'
-                     % (region.show(), event.show(), agitator.show_full()),
+                     'Новая заявка на участие\nРегион %s\n%s %s\nВолонтер %s'
+                     % (region.show(), event.show(), place.show(), agitator.show_full()),
                      parse_mode='Markdown',
                      reply_markup=InlineKeyboardMarkup(keyboard))
