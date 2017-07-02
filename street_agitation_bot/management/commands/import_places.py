@@ -22,6 +22,7 @@ class Command(management_base.BaseCommand):
         with open(options['file'], 'r') as f:
             prev_offset = -1
             place_stack = []
+            cur_order = 0
             for line in f.readlines():
                 line = line.rstrip()
                 cur_offset = 0
@@ -35,7 +36,9 @@ class Command(management_base.BaseCommand):
                 cur_place = new_places_dict.get(line, models.AgitationPlace(region=region, address=line))
                 if place_stack:
                     hierarchies.append(models.AgitationPlaceHierarchy(base_place=place_stack[-1],
-                                                                      sub_place=cur_place))
+                                                                      sub_place=cur_place,
+                                                                      order=cur_order))
+                    cur_order += 1
                 new_places_list.append(cur_place)
                 new_places_dict[line] = cur_place
                 place_stack.append(cur_place)

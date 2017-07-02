@@ -100,6 +100,8 @@ class AgitationPlaceHierarchy(models.Model):
     base_place = models.ForeignKey('AgitationPlace', related_name='hierarchy_base_place')
     sub_place = models.ForeignKey('AgitationPlace', related_name='hierarchy_sub_place')
 
+    order = models.IntegerField()
+
     def save(self, *args, **kwargs):
         if self.base_place.region_id != self.sub_place.region_id:
             raise ValueError('base_place.region_id and sub_place.region_id must be equals')
@@ -123,7 +125,8 @@ class AgitationPlace(models.Model):
 
     @property
     def subplaces(self):
-        return list(AgitationPlace.objects.filter(hierarchy_sub_place__base_place_id=self.id).all())
+        return list(AgitationPlace.objects.filter(hierarchy_sub_place__base_place_id=self.id)
+                    .order_by('hierarchy_sub_place__order').all())
 
     def show(self, markdown=True):
         if markdown:
