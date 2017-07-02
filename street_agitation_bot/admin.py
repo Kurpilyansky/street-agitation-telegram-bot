@@ -87,6 +87,23 @@ class AgitationPlaceAdmin(VersionAdmin):
     )
 
 
+class AgitationPlaceHierarchyAdmin(VersionAdmin):
+    list_display = (
+        'id',
+        'base_place',
+        'sub_place',
+    )
+
+    list_filter = (
+        'base_place',
+    )
+
+    search_fields = (
+        '=id',
+        'sub_place__address',
+    )
+
+
 class AgitationEventAdmin(VersionAdmin):
     list_display = (
         'id',
@@ -141,6 +158,7 @@ admin.site.register(models.Region, RegionAdmin)
 admin.site.register(models.Agitator, AgitatorAdmin)
 admin.site.register(models.AgitatorInRegion, AgitatorInRegionAdmin)
 admin.site.register(models.AgitationPlace, AgitationPlaceAdmin)
+admin.site.register(models.AgitationPlaceHierarchy, AgitationPlaceHierarchyAdmin)
 admin.site.register(models.AgitationEvent, AgitationEventAdmin)
 admin.site.register(models.AgitationEventParticipant, AgitationEventParticipantAdmin)
 admin.site.register(models.ConversationState, ConversationStateAdmin)

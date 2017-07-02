@@ -96,6 +96,22 @@ class AgitatorInRegion(models.Model):
         unique_together = ('agitator', 'region')
 
 
+class AgitationPlaceHierarchy(models.Model):
+    base_place = models.ForeignKey('AgitationPlace', related_name='hierarchy_base_place')
+    sub_place = models.ForeignKey('AgitationPlace', related_name='hierarchy_sub_place')
+
+    def save(self, *args, **kwargs):
+        if self.base_place.region_id != self.sub_place.region_id:
+            raise ValueError('base_place.region_id and sub_place.region_id must be equals')
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return '%s -> %s' % (self.base_place, self.sub_place)
+
+    class Meta:
+        unique_together = ['base_place', 'sub_place']
+
+
 class AgitationPlace(models.Model):
     region = models.ForeignKey(Region)
 
@@ -104,6 +120,10 @@ class AgitationPlace(models.Model):
     geo_longitude = models.FloatField(null=True, blank=True)
 
     last_update_time = models.DateTimeField(auto_now=True)
+
+    @property
+    def subplaces(self):
+        return list(AgitationPlace.objects.filter(hierarchy_sub_place__base_place_id=self.id).all())
 
     def show(self, markdown=True):
         if markdown:

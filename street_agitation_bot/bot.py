@@ -334,6 +334,7 @@ def show_schedule(bot, update, user_data, region_id):
                       parse_mode="Markdown",
                       reply_markup=keyboard)
 
+
 @region_decorator
 def show_participations(bot, update, user_data, region_id):
     region = models.Region.get_by_id(region_id)
@@ -503,37 +504,62 @@ def apply_to_agitate_button(bot, update, user_data):
 @region_decorator
 def apply_to_agitate_place(bot, update, user_data, region_id):
     event = models.AgitationEvent.objects.filter(id=user_data['event_id']).first()
-    if event:
-        user_data['place_id'] = event.place_id
-        keyboard = [[InlineKeyboardButton('Да', callback_data=YES),
-                     InlineKeyboardButton('Нет', callback_data=NO)]]
-        send_message_text(bot, update, user_data,
-                          '*Подтвердите, что ваш выбор*\n'
-                          'Вы хотите агитировать на кубе %s?' % event.show(),
-                          parse_mode="Markdown",
-                          reply_markup=InlineKeyboardMarkup(keyboard))
-        return
-    else:
+    if not event:
         del user_data['event_id']
         return APPLY_TO_AGITATE
+
+    place_ids = user_data.get('place_ids', [event.place_id])
+    while place_ids:
+        place = models.AgitationPlace.objects.filter(id=place_ids[-1]).first()
+        if not place:
+            place_ids.pop()
+            continue
+        subplaces = place.subplaces
+        if subplaces:
+            keyboard = [[InlineKeyboardButton(p.show(markdown=False), callback_data=str(p.id))]
+                        for p in subplaces]
+            keyboard.append([InlineKeyboardButton('Назад', callback_data=NO)])
+            send_message_text(bot, update, user_data,
+                              'Выберите место для участия в %s\n' % event.show(),
+                              parse_mode="Markdown",
+                              reply_markup=InlineKeyboardMarkup(keyboard))
+        else:
+            keyboard = [[InlineKeyboardButton('Да', callback_data=YES),
+                         InlineKeyboardButton('Нет', callback_data=NO)]]
+            send_message_text(bot, update, user_data,
+                              '*Подтвердите, что ваш выбор*\n'
+                              'Вы хотите агитировать на кубе %s?' % event.show(),
+                              parse_mode="Markdown",
+                              reply_markup=InlineKeyboardMarkup(keyboard))
+        break
+    user_data['place_ids'] = place_ids
 
 
 def apply_to_agitate_place_button(bot, update, user_data):
     query = update.callback_query
     query.answer()
     if query.data == NO:
-        del user_data['event_id']
-        return APPLY_TO_AGITATE
+        place_ids = user_data['place_ids']
+        place_ids.pop()
+        user_data['place_ids'] = place_ids
+        if not place_ids:
+            del user_data['place_ids']
+            del user_data['event_id']
+            return APPLY_TO_AGITATE
     elif query.data == YES:
         event_id = user_data['event_id']
-        place_id = user_data['place_id']
+        place_id = user_data['place_ids'][-1]
         agitator_id = update.effective_user.id
         created = models.AgitationEventParticipant.create(agitator_id, event_id, place_id)
         if created:
             notifications.notify_about_new_participant(bot, event_id, place_id, agitator_id)
         del user_data['event_id']
-        del user_data['place_id']
-        return APPLY_TO_AGITATE
+        del user_data['place_ids']
+        return SHOW_PARTICIPATIONS
+    else:
+        match = re.match('^\d+$', query.data)
+        if bool(match):
+            user_data['place_ids'].append(int(query.data))
 
 
 def set_event_place(bot, update, user_data):
