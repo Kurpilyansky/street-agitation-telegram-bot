@@ -805,7 +805,7 @@ def run_bot():
     conv_handler = ConversationHandler(
         filters=~Filters.group,
         entry_points=[CommandHandler("start", start)],
-
+        unknown_state_handler=EmptyHandler(cancel, pass_user_data=True),
         states={
             SET_LAST_NAME: [EmptyHandler(set_last_name_start, pass_user_data=True),
                             MessageHandler(Filters.text, set_last_name, pass_user_data=True)],

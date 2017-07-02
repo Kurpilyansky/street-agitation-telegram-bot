@@ -109,6 +109,7 @@ class ConversationHandler(Handler):
     def __init__(self,
                  entry_points,
                  states,
+                 unknown_state_handler,
                  fallbacks,
                  filters=None,
                  allow_reentry=False,
@@ -121,6 +122,8 @@ class ConversationHandler(Handler):
 
         self.states = states
         """:type: dict[str: telegram.ext.Handler]"""
+
+        self.unknown_state_handler = unknown_state_handler
 
         self.fallbacks = fallbacks
         """:type: list[telegram.ext.Handler]"""
@@ -237,6 +240,10 @@ class ConversationHandler(Handler):
                 if state is None:
                     return False
 
+        if state is not None and not handler:
+            if state not in self.states:
+                handler = self.unknown_state_handler
+
         # Get the handler list for current state, if we didn't find one yet and we're still here
         if state is not None and not handler:
             handlers = self.states.get(state)
@@ -275,7 +282,7 @@ class ConversationHandler(Handler):
         visited = dict()
         while key in self.conversations:
             state = self.conversations.get(key)
-            handlers = self.states.get(state)
+            handlers = self.states.get(state, [self.unknown_state_handler])
             if (state in visited) or (not handlers) or (not isinstance(handlers[0], EmptyHandler)):
                 break
             visited[state] = True
