@@ -132,7 +132,7 @@ class AgitationPlace(models.Model):
             return self.address
 
     def __str__(self):
-        return self.address
+        return '%s %s' % (self.region.name, self.address)
 
 
 class AgitationEvent(models.Model):

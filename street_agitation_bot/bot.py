@@ -1,8 +1,7 @@
-from street_agitation_bot import bot_settings, models, notifications
+from street_agitation_bot import bot_settings, models, notifications, utils
 
 import traceback
 
-import operator
 import re
 import collections
 from datetime import datetime, date, timedelta
@@ -516,8 +515,9 @@ def apply_to_agitate_place(bot, update, user_data, region_id):
             continue
         subplaces = place.subplaces
         if subplaces:
-            keyboard = [[InlineKeyboardButton(p.show(markdown=False), callback_data=str(p.id))]
-                        for p in subplaces]
+            buttons = [InlineKeyboardButton(p.show(markdown=False), callback_data=str(p.id))
+                       for p in subplaces]
+            keyboard = utils.chunks(buttons, 2)
             keyboard.append([InlineKeyboardButton('Назад', callback_data=NO)])
             send_message_text(bot, update, user_data,
                               'Выберите место для участия в %s\n' % event.show(),
@@ -639,15 +639,11 @@ def skip_place_location(bot, update, user_data):
         return SELECT_DATES
 
 
-def chunks(arr, chunk_len):
-    return [arr[i:i + chunk_len] for i in range(0, len(arr), chunk_len)]
-
-
 def _build_dates_keyboard(user_data):
     dates_dict = user_data['dates_dict']
     buttons = [InlineKeyboardButton(("+ " if value["selected"] else "") + key, callback_data=key)
                for key, value in dates_dict.items()]
-    keyboard = chunks(buttons, 5)
+    keyboard = utils.chunks(buttons, 5)
     if any([value for value in dates_dict.values() if value["selected"]]):
         keyboard.append([InlineKeyboardButton("Закончить", callback_data=END)])
     else:
