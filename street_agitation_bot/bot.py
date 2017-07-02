@@ -278,18 +278,18 @@ def show_menu(bot, update, user_data):
     keyboard = list()
     if 'region_id' in user_data:
         keyboard.append([InlineKeyboardButton('Расписание', callback_data=SCHEDULE)])
-        keyboard.append([InlineKeyboardButton('Записаться на куб', callback_data=APPLY_TO_AGITATE)])
+        keyboard.append([InlineKeyboardButton('Записаться', callback_data=APPLY_TO_AGITATE)])
         region_id = user_data['region_id']
         agitator_id = update.effective_user.id
         if models.AgitationEventParticipant.objects.filter(
                                         agitator_id=agitator_id,
                                         event__start_date__gte=date.today()).exists():
-            keyboard.append([InlineKeyboardButton('Мои кубы', callback_data=SHOW_PARTICIPATIONS)])
+            keyboard.append([InlineKeyboardButton('Мои заявки', callback_data=SHOW_PARTICIPATIONS)])
         keyboard.append([InlineKeyboardButton('Настройки', callback_data=SHOW_PROFILE)])
         abilities = models.AgitatorInRegion.get(region_id, agitator_id)
         if abilities.is_admin:
             keyboard.append([InlineKeyboardButton('Добавить ивент', callback_data=SET_EVENT_PLACE)])
-            keyboard.append([InlineKeyboardButton('Заявки на кубы', callback_data=MANAGE_EVENTS)])
+            keyboard.append([InlineKeyboardButton('Заявки на участие', callback_data=MANAGE_EVENTS)])
         if bot_settings.is_admin_user_id(agitator_id):
             keyboard.append([InlineKeyboardButton('Сделать рассылку', callback_data=MAKE_BROADCAST)])
     else:
@@ -327,7 +327,7 @@ def show_schedule(bot, update, user_data, region_id):
     schedule_text = "*Расписание*\n" + schedule_text
     keyboard = _create_back_to_menu_keyboard()
     if events:
-        keyboard.inline_keyboard[0:0] = [[InlineKeyboardButton('Записаться на куб', callback_data=APPLY_TO_AGITATE)]]
+        keyboard.inline_keyboard[0:0] = [[InlineKeyboardButton('Записаться', callback_data=APPLY_TO_AGITATE)]]
     send_message_text(bot, update, user_data,
                       schedule_text,
                       parse_mode="Markdown",
@@ -352,8 +352,8 @@ def show_participations(bot, update, user_data, region_id):
             lines.append(line)
         text = "\n".join(lines)
     else:
-        text = "Вы не записались ни на один будущий куб"
-    text = "*Ваши кубы*\n" + text
+        text = "Вы не записались ни на одно мероприятие в будущем"
+    text = "*Вы записались на следующие мероприятия*\n" + text
     keyboard = _create_back_to_menu_keyboard()
     send_message_text(bot, update, user_data,
                       text,
@@ -385,7 +385,7 @@ def manage_events(bot, update, user_data, region_id):
                                      InlineKeyboardButton(u'\U0000274c ' + a.agitator.full_name, callback_data=NO + str(a.id))])
                 text = '\n'.join(lines)
             else:
-                text = "Никто не записался на этот куб :("
+                text = "Никто не записался на это мероприятие :("
             keyboard.append([InlineKeyboardButton('Назад', callback_data=BACK)])
 
             send_message_text(bot, update, user_data,
@@ -411,7 +411,7 @@ def manage_events(bot, update, user_data, region_id):
         keyboard.append([InlineKeyboardButton('Вперед', callback_data=FORWARD)])
     keyboard.append([InlineKeyboardButton('<< Меню', callback_data=MENU)])
     send_message_text(bot, update, user_data,
-                      '*Выберите куб*',
+                      '*Выберите мероприятие*',
                       parse_mode="Markdown",
                       reply_markup=InlineKeyboardMarkup(keyboard))
 
@@ -468,9 +468,9 @@ def apply_to_agitate(bot, update, user_data, region_id):
                                                   callback_data=str(event.id))])
     if not any_event:
         keyboard = _create_back_to_menu_keyboard()
-        keyboard.inline_keyboard[0:0] = [[InlineKeyboardButton('Мои кубы', callback_data=SHOW_PARTICIPATIONS)]]
+        keyboard.inline_keyboard[0:0] = [[InlineKeyboardButton('Мои заявки', callback_data=SHOW_PARTICIPATIONS)]]
         send_message_text(bot, update, user_data,
-                          '*Вы уже подали заявку на все запланированные кубы. Спасибо вам*',
+                          '*Вы уже подали заявку на все запланированные мероприятия. Спасибо вам*',
                           parse_mode="Markdown",
                           reply_markup=keyboard)
         del user_data['events_offset']
@@ -480,7 +480,7 @@ def apply_to_agitate(bot, update, user_data, region_id):
         keyboard.append([InlineKeyboardButton('Вперед', callback_data=FORWARD)])
     keyboard.append([InlineKeyboardButton('<< Меню', callback_data=MENU)])
     send_message_text(bot, update, user_data,
-                      '*В каких кубах вы хотите поучаствовать в качестве уличного агитатора?*',
+                      '*В каких мероприятиях вы хотите поучаствовать в качестве уличного агитатора?*',
                       parse_mode="Markdown",
                       reply_markup=InlineKeyboardMarkup(keyboard))
 
@@ -535,7 +535,7 @@ def apply_to_agitate_place(bot, update, user_data, region_id):
                          InlineKeyboardButton('Нет', callback_data=NO)]]
             send_message_text(bot, update, user_data,
                               '*Подтвердите, что ваш выбор*\n'
-                              'Вы хотите агитировать на кубе %s?' % event.show(),
+                              'Вы хотите агитировать на %s?' % event.show(),
                               parse_mode="Markdown",
                               reply_markup=InlineKeyboardMarkup(keyboard))
         break
