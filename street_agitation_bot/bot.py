@@ -346,7 +346,7 @@ def show_participations(bot, update, user_data, region_id):
         lines = list()
         for p in participations:
             status = u'\U00002705' if p.approved else (u'\U0000274c' if p.declined else u'\U00002753')
-            line = p.event.show() + " " + status
+            line = p.event.show() + " " + p.place.show() + " " + status
             if p.event.place.region_id != region.id:
                 line = '*%s* %s' % (p.event.place.region.name, line)
             lines.append(line)
@@ -379,7 +379,7 @@ def manage_events(bot, update, user_data, region_id):
                 lines = list()
                 for a in applications:
                     status = u'\U00002705' if a.approved else (u'\U0000274c' if a.declined else u'\U00002753')
-                    line = status + " " + a.agitator.show_full()
+                    line = status + " " + a.place.show() + " " + a.agitator.show_full()
                     lines.append(line)
                     keyboard.append([InlineKeyboardButton(u'\U00002705 ' + a.agitator.full_name, callback_data=YES + str(a.id)),
                                      InlineKeyboardButton(u'\U0000274c ' + a.agitator.full_name, callback_data=NO + str(a.id))])
@@ -515,8 +515,13 @@ def apply_to_agitate_place(bot, update, user_data, region_id):
             continue
         subplaces = place.subplaces
         if subplaces:
-            buttons = [InlineKeyboardButton(p.show(markdown=False), callback_data=str(p.id))
-                       for p in subplaces]
+            buttons = list()
+            for p in subplaces:
+                text = p.show(markdown=False)
+                if event.agitators_limit and not p.subplaces:
+                    text = u'%d/%d %s' % (models.AgitationEventParticipant.get_count(event.id, p.id),
+                                          event.agitators_limit, text)  # \U0001f471
+                buttons.append(InlineKeyboardButton(text, callback_data=str(p.id)))
             keyboard = utils.chunks(buttons, 2)
             keyboard.append([InlineKeyboardButton('Назад', callback_data=NO)])
             send_message_text(bot, update, user_data,
@@ -537,7 +542,6 @@ def apply_to_agitate_place(bot, update, user_data, region_id):
 
 def apply_to_agitate_place_button(bot, update, user_data):
     query = update.callback_query
-    query.answer()
     if query.data == NO:
         place_ids = user_data['place_ids']
         place_ids.pop()
@@ -545,6 +549,7 @@ def apply_to_agitate_place_button(bot, update, user_data):
         if not place_ids:
             del user_data['place_ids']
             del user_data['event_id']
+            query.answer()
             return APPLY_TO_AGITATE
     elif query.data == YES:
         event_id = user_data['event_id']
@@ -555,11 +560,20 @@ def apply_to_agitate_place_button(bot, update, user_data):
             notifications.notify_about_new_participant(bot, event_id, place_id, agitator_id)
         del user_data['event_id']
         del user_data['place_ids']
+        query.answer('Вы записаны')
         return SHOW_PARTICIPATIONS
     else:
         match = re.match('^\d+$', query.data)
         if bool(match):
-            user_data['place_ids'].append(int(query.data))
+            place_id = int(query.data)
+            event = models.AgitationEvent.objects.filter(id=user_data['event_id']).first()
+            if event.agitators_limit:
+                count = models.AgitationEventParticipant.get_count(event.id, place_id)
+                if count == event.agitators_limit:
+                    query.answer('Все места заняты, выберите другое место')
+                    return APPLY_TO_AGITATE_PLACE
+            user_data['place_ids'].append(place_id)
+    query.answer()
 
 
 def set_event_place(bot, update, user_data):

@@ -144,6 +144,8 @@ class AgitationEvent(models.Model):
     start_date = models.DateTimeField(null=False)
     end_date = models.DateTimeField(null=False)
 
+    agitators_limit = models.IntegerField(null=True)
+
     @property
     def region(self):
         return self.place.region
@@ -206,6 +208,11 @@ class AgitationEventParticipant(models.Model):
     @classmethod
     def get(cls, agitator_id, event_id):
         return cls.objects.filter(agitator_id=agitator_id, event_id=event_id).first()
+
+    @classmethod
+    def get_count(cls, event_id, place_id):
+        return cls.objects.filter(event_id=event_id, place_id=place_id,
+                                  declined=False, canceled=False).count()
 
     @classmethod
     def approve(cls, id):
