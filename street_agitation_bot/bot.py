@@ -463,7 +463,9 @@ def apply_to_agitate(bot, update, user_data, region_id):
     for event in events:
         if event.id not in exclude_event_ids:
             any_event = True
-            keyboard.append([InlineKeyboardButton(event.show(markdown=False), callback_data=str(event.id))])
+            keyboard.append([InlineKeyboardButton('%s %s' % (event.show(markdown=False),
+                                                             event.place.show(markdown=False)),
+                                                  callback_data=str(event.id))])
     if not any_event:
         keyboard = _create_back_to_menu_keyboard()
         keyboard.inline_keyboard[0:0] = [[InlineKeyboardButton('Мои кубы', callback_data=SHOW_PARTICIPATIONS)]]
