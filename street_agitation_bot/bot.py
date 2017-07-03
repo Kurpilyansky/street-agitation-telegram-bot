@@ -101,7 +101,11 @@ def start(bot, update):
 
 
 def set_last_name_start(bot, update, user_data):
-    send_message_text(bot, update, user_data, 'Укажите вашу фамилию')
+    text = 'Укажите вашу фамилию'
+    if not models.Agitator.objects.filter(telegram_id=update.effective_user.id).exists():
+        text = 'Пожалуйста, оставьте ваши контакты. Сделайте это сейчас, даже если на данный момент ' \
+               'вы не готовы помогать. Ваши данные будут использованы только для связи с вами.\n\n' + text
+    send_message_text(bot, update, user_data, text)
 
 
 def set_last_name(bot, update, user_data):
