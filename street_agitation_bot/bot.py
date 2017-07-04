@@ -549,9 +549,8 @@ def apply_to_agitate(bot, update, user_data, region_id):
     for event in events:
         if event.id not in exclude_event_ids:
             any_event = True
-            keyboard.append([InlineKeyboardButton('%s %s' % (event.show(markdown=False),
-                                                             event.place.show(markdown=False)),
-                                                  callback_data=str(event.id))])
+            keyboard.append([create_apply_to_agitate_button(event, event.place, True)])
+
     if not any_event:
         keyboard = _create_back_to_menu_keyboard()
         keyboard.inline_keyboard[0:0] = [[InlineKeyboardButton('Мои заявки', callback_data=SHOW_PARTICIPATIONS)]]
@@ -607,11 +606,7 @@ def apply_to_agitate_place(bot, update, user_data, region_id):
         if subplaces:
             buttons = list()
             for p in subplaces:
-                text = p.show(markdown=False)
-                if event.agitators_limit and not p.subplaces:
-                    text = u'%d/%d %s' % (models.AgitationEventParticipant.get_count(event.id, p.id),
-                                          event.agitators_limit, text)  # \U0001f471
-                buttons.append(InlineKeyboardButton(text, callback_data=str(p.id)))
+                buttons.append(create_apply_to_agitate_button(event, p, False))
             keyboard = utils.chunks(buttons, 2)
             keyboard.append([InlineKeyboardButton('Назад', callback_data=NO)])
             send_message_text(bot, update, user_data,
@@ -628,6 +623,18 @@ def apply_to_agitate_place(bot, update, user_data, region_id):
                               reply_markup=InlineKeyboardMarkup(keyboard))
         break
     user_data['place_ids'] = place_ids
+
+
+def create_apply_to_agitate_button(event, place, show_event_info):
+    text = place.show(markdown=False)
+    if show_event_info:
+        text = event.show(markdown=False) + " " + text
+    if not place.subplaces:
+        applies_text = str(models.AgitationEventParticipant.get_count(event.id, place.id))
+        if event.agitators_limit:
+            applies_text = "%s/%d" % (applies_text, event.agitators_limit)
+        text = u'%s\U0001f471 %s' % (applies_text, text)
+    return InlineKeyboardButton(text, callback_data=str(place.id))
 
 
 def apply_to_agitate_place_button(bot, update, user_data):
