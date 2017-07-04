@@ -43,6 +43,7 @@ MENU = 'MENU'
 MAKE_BROADCAST = 'MAKE_BROADCAST'
 MAKE_BROADCAST_CONFIRM = 'MAKE_BROADCAST_CONFIRM'
 SCHEDULE = 'SCHEDULE'
+CUBE_APPLICATION = 'CUBE_APPLICATION'
 APPLY_TO_AGITATE = 'APPLY_TO_AGITATE'
 APPLY_TO_AGITATE_PLACE = 'APPLY_TO_AGITATE_PLACE'
 SHOW_PARTICIPATIONS = 'SHOW_PARTICIPATIONS'
@@ -287,12 +288,14 @@ def show_menu(bot, update, user_data):
         keyboard.append([InlineKeyboardButton('Записаться', callback_data=APPLY_TO_AGITATE)])
         region_id = user_data['region_id']
         agitator_id = update.effective_user.id
+        abilities = models.AgitatorInRegion.get(region_id, agitator_id)
+        if abilities.can_be_applicant:
+            keyboard.append([InlineKeyboardButton('Заявить новый куб', callback_data=CUBE_APPLICATION)])
         if models.AgitationEventParticipant.objects.filter(
                                         agitator_id=agitator_id,
                                         event__start_date__gte=date.today()).exists():
             keyboard.append([InlineKeyboardButton('Мои заявки', callback_data=SHOW_PARTICIPATIONS)])
         keyboard.append([InlineKeyboardButton('Настройки', callback_data=SHOW_PROFILE)])
-        abilities = models.AgitatorInRegion.get(region_id, agitator_id)
         if abilities.is_admin:
             keyboard.append([InlineKeyboardButton('Добавить ивент', callback_data=SET_EVENT_PLACE)])
             keyboard.append([InlineKeyboardButton('Заявки на участие', callback_data=MANAGE_EVENTS)])
@@ -363,6 +366,12 @@ def show_schedule(bot, update, user_data, region_id):
                       schedule_text,
                       parse_mode="Markdown",
                       reply_markup=keyboard)
+
+
+def cube_application(bot, update, user_data):
+    text = 'Если вы готовы стать заявителем куба, то вам нужно заполнить эту форму ' \
+           'и подать её в администрацию вашего района. https://goo.gl/3GneK2'  #TODO make a document
+    send_message_text(bot, update, user_data, text, reply_markup=_create_back_to_menu_keyboard())
 
 
 @region_decorator
@@ -479,6 +488,7 @@ def apply_to_agitate(bot, update, user_data, region_id):
         user_data['events_offset'] = 0
 
     agitator_id = update.effective_user.id
+    abilities = models.AgitatorInRegion.get(region_id, agitator_id)
     offset = user_data['events_offset']
     query_set = models.AgitationEvent.objects.filter(start_date__gte=date.today(), place__region_id=region_id)
     events = list(query_set.select_related('place')[offset:offset + EVENT_PAGE_SIZE])
@@ -509,6 +519,8 @@ def apply_to_agitate(bot, update, user_data, region_id):
 
     if query_set.count() > offset + EVENT_PAGE_SIZE:
         keyboard.append([InlineKeyboardButton('Вперед', callback_data=FORWARD)])
+    if abilities.can_be_applicant:
+        keyboard.append([InlineKeyboardButton('Заявить новый куб', callback_data=CUBE_APPLICATION)])
     keyboard.append([InlineKeyboardButton('<< Меню', callback_data=MENU)])
     send_message_text(bot, update, user_data,
                       '*В каких мероприятиях вы хотите поучаствовать в качестве уличного агитатора?*',
@@ -523,7 +535,7 @@ def apply_to_agitate_button(bot, update, user_data):
         user_data['events_offset'] -= EVENT_PAGE_SIZE
     elif query.data == FORWARD:
         user_data['events_offset'] += EVENT_PAGE_SIZE
-    elif query.data in [MENU, SHOW_PARTICIPATIONS]:
+    elif query.data in [MENU, SHOW_PARTICIPATIONS, CUBE_APPLICATION]:
         return query.data
     else:
         match = re.match('^\d+$', query.data)
@@ -903,6 +915,8 @@ def run_bot():
             MAKE_BROADCAST_CONFIRM: [EmptyHandler(make_broadcast_confirm, pass_user_data=True),
                                      CallbackQueryHandler(make_broadcast_confirm_button, pass_user_data=True)],
             SCHEDULE: [EmptyHandler(show_schedule, pass_user_data=True), standard_callback_query_handler],
+            CUBE_APPLICATION: [EmptyHandler(cube_application, pass_user_data=True),
+                               standard_callback_query_handler],
             SHOW_PARTICIPATIONS: [EmptyHandler(show_participations, pass_user_data=True),
                                   standard_callback_query_handler],
             MANAGE_EVENTS: [EmptyHandler(manage_events, pass_user_data=True),
