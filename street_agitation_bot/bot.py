@@ -52,6 +52,7 @@ SET_PLACE_ADDRESS = 'SET_PLACE_ADDRESS'
 SET_PLACE_LOCATION = 'SET_PLACE_LOCATION'
 SELECT_DATES = 'SELECT_DATES'
 SET_EVENT_TIME = 'SET_EVENT_TIME'
+CREATE_EVENT_SERIES_CONFIRM = 'CREATE_EVENT_SERIES_CONFIRM'
 CREATE_EVENT_SERIES = 'CREATE_EVENT_SERIES'
 
 
@@ -713,15 +714,14 @@ def set_event_time(bot, update, user_data):
     match = re.match("([01]?[0-9]|2[0-3]):([0-5][0-9])\s*-\s*([01]?[0-9]|2[0-3]):([0-5][0-9])", text)
     if bool(match):
         user_data['time_range'] = list(map(int, match.groups()))
-        return CREATE_EVENT_SERIES
+        return CREATE_EVENT_SERIES_CONFIRM
 
 
 @region_decorator
-def create_event_series(bot, update, user_data, region_id):
+def create_event_series_confirm(bot, update, user_data, region_id):
     if 'place_id' in user_data:
         place = models.AgitationPlace.objects.get(id=user_data['place_id'])
         place.save()  # for update last_update_time
-        del user_data['place_id']
     else:
         location = user_data['location']
         place = models.AgitationPlace(
@@ -733,10 +733,51 @@ def create_event_series(bot, update, user_data, region_id):
         place.save()
         del user_data['address']
         del user_data['location']
+        user_data['place_id'] = place.id
 
     if place.region_id != region_id:
         return cancel(bot, update, user_data)
+    #TODO copypaste
+    time_range = user_data['time_range']
+    from_seconds = (time_range[0] * 60 + time_range[1]) * 60
+    to_seconds = (time_range[2] * 60 + time_range[3]) * 60
+    if to_seconds < from_seconds:
+        to_seconds += 86400
+    events = list()
+    for date_tuple in user_data['dates']:
+        # TODO timezone
+        event_date = date(year=date_tuple[0], month=date_tuple[1], day=date_tuple[2])
+        event_datetime = datetime.combine(event_date, datetime.min.time())
+        event = models.AgitationEvent(
+            place=place,
+            name='Куб',
+            start_date=event_datetime + timedelta(seconds=from_seconds),
+            end_date=event_datetime + timedelta(seconds=to_seconds),
+        )
+        events.append(event)
+    text = "\n".join(["*Вы уверены, что хотите добавить события?*"] +
+                     ['%s %s' % (e.show(), place.show()) for e in events])
+    keyboard = [[InlineKeyboardButton('Создать', callback_data=YES),
+                 InlineKeyboardButton('Отменить', callback_data=NO)]]
+    send_message_text(bot, update, user_data, text,
+                      parse_mode="Markdown",
+                      reply_markup=InlineKeyboardMarkup(keyboard))
 
+
+def create_event_series_confirm_button(bot, update, user_data):
+    query = update.callback_query
+    query.answer()
+    if query.data == YES:
+        return CREATE_EVENT_SERIES
+    elif query.data == NO:
+        del user_data['dates']
+        del user_data['time_range']
+        del user_data['place_id']
+        return MENU
+
+
+def create_event_series(bot, update, user_data):
+    place = models.AgitationPlace.objects.get(id=user_data['place_id'])
     time_range = user_data['time_range']
     from_seconds = (time_range[0] * 60 + time_range[1]) * 60
     to_seconds = (time_range[2] * 60 + time_range[3]) * 60
@@ -761,6 +802,7 @@ def create_event_series(bot, update, user_data, region_id):
 
     del user_data['dates']
     del user_data['time_range']
+    del user_data['place_id']
 
 
 def clear_user_data(user_data, keep_keys=None):
@@ -856,8 +898,9 @@ def run_bot():
             SET_EVENT_TIME: [EmptyHandler(set_event_time_start, pass_user_data=True),
                              MessageHandler(Filters.text, set_event_time, pass_user_data=True),
                              CallbackQueryHandler(set_event_time, pass_user_data=True)],
-            CREATE_EVENT_SERIES: [EmptyHandler(create_event_series, pass_user_data=True),
-                                  standard_callback_query_handler]
+            CREATE_EVENT_SERIES_CONFIRM: [EmptyHandler(create_event_series_confirm, pass_user_data=True),
+                                          CallbackQueryHandler(create_event_series_confirm_button, pass_user_data=True)],
+            CREATE_EVENT_SERIES: [EmptyHandler(create_event_series, pass_user_data=True)]
         },
         fallbacks=[CommandHandler('cancel', cancel, pass_user_data=True),
                    CommandHandler("region", change_region, pass_user_data=True)]
