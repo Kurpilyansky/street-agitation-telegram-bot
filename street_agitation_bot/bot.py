@@ -446,7 +446,8 @@ def manage_events(bot, update, user_data, region_id):
     if offset > 0:
         keyboard.append([InlineKeyboardButton('Назад', callback_data=BACK)])
     for event in events:
-        keyboard.append([InlineKeyboardButton(event.show(markdown=False), callback_data=str(event.id))])
+        keyboard.append([InlineKeyboardButton('%s %s' % (event.show(markdown=False), event.place.show(markdown=False)),
+                                              callback_data=str(event.id))])
     if query_set.count() > offset + EVENT_PAGE_SIZE:
         keyboard.append([InlineKeyboardButton('Вперед', callback_data=FORWARD)])
     keyboard.append([InlineKeyboardButton('<< Меню', callback_data=MENU)])
