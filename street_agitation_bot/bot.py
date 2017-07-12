@@ -41,6 +41,7 @@ SAVE_ABILITIES = 'SAVE_ABILITIES'
 
 MENU = 'MENU'
 MAKE_BROADCAST = 'MAKE_BROADCAST'
+MAKE_BROADCAST_CONFIRM = 'MAKE_BROADCAST_CONFIRM'
 SCHEDULE = 'SCHEDULE'
 APPLY_TO_AGITATE = 'APPLY_TO_AGITATE'
 APPLY_TO_AGITATE_PLACE = 'APPLY_TO_AGITATE_PLACE'
@@ -295,7 +296,6 @@ def show_menu(bot, update, user_data):
         if abilities.is_admin:
             keyboard.append([InlineKeyboardButton('Добавить ивент', callback_data=SET_EVENT_PLACE)])
             keyboard.append([InlineKeyboardButton('Заявки на участие', callback_data=MANAGE_EVENTS)])
-        if bot_settings.is_admin_user_id(agitator_id):
             keyboard.append([InlineKeyboardButton('Сделать рассылку', callback_data=MAKE_BROADCAST)])
     else:
         keyboard.append([InlineKeyboardButton('Выбрать регион', callback_data=SELECT_REGION)])
@@ -308,15 +308,41 @@ def make_broadcast_start(bot, update, user_data):
                       parse_mode='Markdown')
 
 
-def make_broadcast(bot, update):
-    errors = list()
-    for a in models.Agitator.objects.all():
-        try:
-            bot.send_message(a.telegram_id, update.message.text)
-        except TelegramError as e:
-            logger.error(e, exc_info=1)
-            errors.append(e)
-    return MENU
+def make_broadcast(bot, update, user_data):
+    user_data['broadcast_text'] = update.message.text
+    return MAKE_BROADCAST_CONFIRM
+
+
+def make_broadcast_confirm(bot, update, user_data):
+    broadcast_text = user_data['broadcast_text']
+    text = '*Вы уверены, что хотите отправить всем пользователям следующее сообщение:*\n\n%s' % broadcast_text
+    keyboard = [[InlineKeyboardButton('Отправить?', callback_data=YES),
+                 InlineKeyboardButton('Отмена', callback_data=NO)]]
+    send_message_text(bot, update, user_data, text,
+                      parse_mode='Markdown',
+                      reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+def make_broadcast_confirm_button(bot, update, user_data):
+    if 'broadcast_text' not in user_data:
+        return MENU
+
+    broadcast_text = user_data['broadcast_text']
+    del user_data['broadcast_text']
+
+    query = update.callback_query
+    query.answer()
+    if query.data == YES:
+        errors = list()
+        for a in models.Agitator.objects.all():
+            try:
+                bot.send_message(a.telegram_id, broadcast_text)
+            except TelegramError as e:
+                logger.error(e, exc_info=1)
+                errors.append(e)
+        return MENU
+    else:
+        return MENU
 
 
 @region_decorator
@@ -873,7 +899,9 @@ def run_bot():
                              standard_callback_query_handler],
             MENU: [EmptyHandler(show_menu, pass_user_data=True), standard_callback_query_handler],
             MAKE_BROADCAST: [EmptyHandler(make_broadcast_start, pass_user_data=True),
-                             MessageHandler(Filters.text, make_broadcast)],
+                             MessageHandler(Filters.text, make_broadcast, pass_user_data=True)],
+            MAKE_BROADCAST_CONFIRM: [EmptyHandler(make_broadcast_confirm, pass_user_data=True),
+                                     CallbackQueryHandler(make_broadcast_confirm_button, pass_user_data=True)],
             SCHEDULE: [EmptyHandler(show_schedule, pass_user_data=True), standard_callback_query_handler],
             SHOW_PARTICIPATIONS: [EmptyHandler(show_participations, pass_user_data=True),
                                   standard_callback_query_handler],
