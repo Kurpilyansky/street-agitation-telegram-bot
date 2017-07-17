@@ -326,7 +326,8 @@ def make_broadcast_confirm(bot, update, user_data):
                       reply_markup=InlineKeyboardMarkup(keyboard))
 
 
-def make_broadcast_confirm_button(bot, update, user_data):
+@region_decorator
+def make_broadcast_confirm_button(bot, update, user_data, region_id):
     if 'broadcast_text' not in user_data:
         return MENU
 
@@ -337,7 +338,7 @@ def make_broadcast_confirm_button(bot, update, user_data):
     query.answer()
     if query.data == YES:
         errors = list()
-        for a in models.Agitator.objects.all():
+        for a in models.Agitator.objects.filter(agitatorinregion__region_id=region_id).all():
             try:
                 bot.send_message(a.telegram_id, broadcast_text)
             except TelegramError as e:
