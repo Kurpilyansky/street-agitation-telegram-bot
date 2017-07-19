@@ -144,6 +144,8 @@ class AgitationEvent(models.Model):
     start_date = models.DateTimeField(null=False)
     end_date = models.DateTimeField(null=False)
 
+    is_canceled = models.BooleanField(default=False)
+
     agitators_limit = models.IntegerField(null=True, blank=True)
 
     @property
@@ -155,13 +157,15 @@ class AgitationEvent(models.Model):
 
     def show(self, markdown=True):
         if markdown:
-            return "%s-%s, %s" % (self.start_date.strftime("%d.%m %H:%M"),
-                                  self.end_date.strftime("%H:%M"),
-                                  utils.escape_markdown(self.name))
+            return "%s%s-%s, %s" % ("*ОТМЕНЕН* " if self.is_canceled else "",
+                                    self.start_date.strftime("%d.%m %H:%M"),
+                                    self.end_date.strftime("%H:%M"),
+                                    utils.escape_markdown(self.name))
         else:
-            return "%s-%s, %s" % (self.start_date.strftime("%d.%m %H:%M"),
-                                  self.end_date.strftime("%H:%M"),
-                                  self.name)
+            return "%s%s-%s, %s" % ("ОТМЕНЕН " if self.is_canceled else "",
+                                    self.start_date.strftime("%d.%m %H:%M"),
+                                    self.end_date.strftime("%H:%M"),
+                                    self.name)
 
     def __str__(self):
         return "%s-%s, %s %s" % (self.start_date.strftime("%d.%m %H:%M"),

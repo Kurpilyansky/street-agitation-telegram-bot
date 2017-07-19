@@ -48,6 +48,7 @@ APPLY_TO_AGITATE = 'APPLY_TO_AGITATE'
 APPLY_TO_AGITATE_PLACE = 'APPLY_TO_AGITATE_PLACE'
 SHOW_PARTICIPATIONS = 'SHOW_PARTICIPATIONS'
 MANAGE_EVENTS = 'MANAGE_EVENTS'
+CANCEL_EVENT = 'CANCEL_EVENT'
 SET_EVENT_PLACE = 'SET_EVENT_PLACE'
 SELECT_EVENT_PLACE = 'SELECT_EVENT_PLACE'
 SET_PLACE_ADDRESS = 'SET_PLACE_ADDRESS'
@@ -353,7 +354,8 @@ def make_broadcast_confirm_button(bot, update, user_data, region_id):
 def show_schedule(bot, update, user_data, region_id):
     events = list(models.AgitationEvent.objects.filter(
         start_date__gte=date.today(),
-        place__region_id=region_id
+        place__region_id=region_id,
+        is_canceled=False
     ).select_related('place'))
     if events:
         schedule_text = "\n".join(['%s %s' % (e.show(), e.place.show()) for e in events])
@@ -427,6 +429,8 @@ def manage_events(bot, update, user_data, region_id):
                 text = '\n'.join(lines)
             else:
                 text = "Никто не записался на это мероприятие :("
+            if not event.is_canceled:
+                keyboard.append([InlineKeyboardButton('Отменить мероприятие', callback_data=CANCEL_EVENT)])
             keyboard.append([InlineKeyboardButton('Назад', callback_data=BACK)])
 
             send_message_text(bot, update, user_data,
@@ -461,6 +465,8 @@ def manage_events(bot, update, user_data, region_id):
 def manage_events_button(bot, update, user_data):
     query = update.callback_query
     query.answer()
+    if query.data == CANCEL_EVENT:
+        return CANCEL_EVENT
     if query.data == BACK:
         if 'event_id' in user_data:
             del user_data['event_id']
@@ -485,6 +491,40 @@ def manage_events_button(bot, update, user_data):
 
 
 @region_decorator
+def cancel_event(bot, update, user_data, region_id):
+    agitator_id = update.effective_user.id
+    abilities = models.AgitatorInRegion.get(region_id, agitator_id)
+    if not abilities or not abilities.is_admin:
+        return MENU
+    if 'event_id' not in user_data:
+        return MENU
+    event = models.AgitationEvent.objects.filter(id=user_data['event_id']).first()
+    if not event:
+        del user_data['event_id']
+        return MENU
+    if event.is_canceled:
+        return MANAGE_EVENTS
+    keyboard = [[InlineKeyboardButton('Да', callback_data=YES),
+                 InlineKeyboardButton('Нет', callback_data=NO)]]
+    send_message_text(bot, update, user_data,
+                      event.show() + '\n*Вы уверены, что хотите отменить мероприятие?*',
+                      parse_mode="Markdown",
+                      reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+def cancel_event_button(bot, update, user_data):
+    query = update.callback_query
+    query.answer()
+    event = models.AgitationEvent.objects.filter(id=user_data['event_id']).first()
+    if query.data == YES:
+        event.is_canceled = True
+        event.save()
+        return MANAGE_EVENTS
+    elif query.data == NO:
+        return MANAGE_EVENTS
+
+
+@region_decorator
 def apply_to_agitate(bot, update, user_data, region_id):
     if 'events_offset' not in user_data:
         user_data['events_offset'] = 0
@@ -492,7 +532,9 @@ def apply_to_agitate(bot, update, user_data, region_id):
     agitator_id = update.effective_user.id
     abilities = models.AgitatorInRegion.get(region_id, agitator_id)
     offset = user_data['events_offset']
-    query_set = models.AgitationEvent.objects.filter(start_date__gte=date.today(), place__region_id=region_id)
+    query_set = models.AgitationEvent.objects.filter(start_date__gte=date.today(),
+                                                     place__region_id=region_id,
+                                                     is_canceled=False)
     events = list(query_set.select_related('place')[offset:offset + EVENT_PAGE_SIZE])
     participations = list(models.AgitationEventParticipant.objects.filter(
         agitator_id=agitator_id,
@@ -923,6 +965,8 @@ def run_bot():
                                   standard_callback_query_handler],
             MANAGE_EVENTS: [EmptyHandler(manage_events, pass_user_data=True),
                             CallbackQueryHandler(manage_events_button, pass_user_data=True)],
+            CANCEL_EVENT: [EmptyHandler(cancel_event, pass_user_data=True),
+                           CallbackQueryHandler(cancel_event_button, pass_user_data=True)],
             APPLY_TO_AGITATE: [EmptyHandler(apply_to_agitate, pass_user_data=True),
                                CallbackQueryHandler(apply_to_agitate_button, pass_user_data=True)],
             APPLY_TO_AGITATE_PLACE: [EmptyHandler(apply_to_agitate_place, pass_user_data=True),
@@ -944,7 +988,8 @@ def run_bot():
                              CallbackQueryHandler(set_event_time, pass_user_data=True)],
             CREATE_EVENT_SERIES_CONFIRM: [EmptyHandler(create_event_series_confirm, pass_user_data=True),
                                           CallbackQueryHandler(create_event_series_confirm_button, pass_user_data=True)],
-            CREATE_EVENT_SERIES: [EmptyHandler(create_event_series, pass_user_data=True)]
+            CREATE_EVENT_SERIES: [EmptyHandler(create_event_series, pass_user_data=True),
+                                  standard_callback_query_handler]
         },
         fallbacks=[CommandHandler('cancel', cancel, pass_user_data=True),
                    CommandHandler("region", change_region, pass_user_data=True)]
