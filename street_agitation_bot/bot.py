@@ -49,6 +49,7 @@ APPLY_TO_AGITATE_PLACE = 'APPLY_TO_AGITATE_PLACE'
 SHOW_PARTICIPATIONS = 'SHOW_PARTICIPATIONS'
 MANAGE_EVENTS = 'MANAGE_EVENTS'
 CANCEL_EVENT = 'CANCEL_EVENT'
+SET_EVENT_NAME = 'SET_EVENT_NAME'
 SET_EVENT_PLACE = 'SET_EVENT_PLACE'
 SELECT_EVENT_PLACE = 'SELECT_EVENT_PLACE'
 SET_PLACE_ADDRESS = 'SET_PLACE_ADDRESS'
@@ -298,7 +299,7 @@ def show_menu(bot, update, user_data):
             keyboard.append([InlineKeyboardButton('Мои заявки', callback_data=SHOW_PARTICIPATIONS)])
         keyboard.append([InlineKeyboardButton('Настройки', callback_data=SHOW_PROFILE)])
         if abilities.is_admin:
-            keyboard.append([InlineKeyboardButton('Добавить ивент', callback_data=SET_EVENT_PLACE)])
+            keyboard.append([InlineKeyboardButton('Добавить ивент', callback_data=SET_EVENT_NAME)])
             keyboard.append([InlineKeyboardButton('Заявки на участие', callback_data=MANAGE_EVENTS)])
             keyboard.append([InlineKeyboardButton('Сделать рассылку', callback_data=MAKE_BROADCAST)])
     else:
@@ -665,9 +666,31 @@ def apply_to_agitate_place_button(bot, update, user_data):
     query.answer()
 
 
+def set_event_name(bot, update, user_data):
+    keyboard = [[InlineKeyboardButton('Куб', callback_data='Куб'),
+                 InlineKeyboardButton('Автокуб', callback_data='Автокуб')],
+                [InlineKeyboardButton("Отмена", callback_data=MENU)]]
+    send_message_text(bot, update, user_data,
+                      "*Укажите тип ивента*",
+                      parse_mode='Markdown',
+                      reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+def set_event_name_button(bot, update, user_data):
+    query = update.callback_query
+    query.answer()
+    if query.data == MENU:
+        return MENU
+    user_data['event_name'] = query.data
+    return SET_EVENT_PLACE
+
+
 def set_event_place(bot, update, user_data):
+    if 'place_id' in user_data:
+        del user_data['place_id']
     keyboard = [[InlineKeyboardButton('Выбрать место из старых', callback_data=SELECT_EVENT_PLACE)],
-                [InlineKeyboardButton('Создать новое место', callback_data=SET_PLACE_ADDRESS)]]
+                [InlineKeyboardButton('Создать новое место', callback_data=SET_PLACE_ADDRESS)],
+                [InlineKeyboardButton('Назад', callback_data=SET_EVENT_NAME)]]
     send_message_text(bot, update, user_data,
                       "Укажите место",
                       reply_markup=InlineKeyboardMarkup(keyboard))
@@ -832,7 +855,7 @@ def create_event_series_confirm(bot, update, user_data, region_id):
         event_datetime = datetime.combine(event_date, datetime.min.time())
         event = models.AgitationEvent(
             place=place,
-            name='Куб',
+            name=user_data['event_name'],
             start_date=event_datetime + timedelta(seconds=from_seconds),
             end_date=event_datetime + timedelta(seconds=to_seconds),
         )
@@ -855,6 +878,7 @@ def create_event_series_confirm_button(bot, update, user_data):
         del user_data['dates']
         del user_data['time_range']
         del user_data['place_id']
+        del user_data['event_name']
         return MENU
 
 
@@ -873,7 +897,7 @@ def create_event_series(bot, update, user_data):
         event_datetime = datetime.combine(event_date, datetime.min.time())
         event = models.AgitationEvent(
             place=place,
-            name='Куб',
+            name=user_data['event_name'],
             start_date=event_datetime + timedelta(seconds=from_seconds),
             end_date=event_datetime + timedelta(seconds=to_seconds),
         )
@@ -885,6 +909,7 @@ def create_event_series(bot, update, user_data):
     del user_data['dates']
     del user_data['time_range']
     del user_data['place_id']
+    del user_data['event_name']
 
 
 def clear_user_data(user_data, keep_keys=None):
@@ -971,6 +996,8 @@ def run_bot():
                                CallbackQueryHandler(apply_to_agitate_button, pass_user_data=True)],
             APPLY_TO_AGITATE_PLACE: [EmptyHandler(apply_to_agitate_place, pass_user_data=True),
                                      CallbackQueryHandler(apply_to_agitate_place_button, pass_user_data=True)],
+            SET_EVENT_NAME: [EmptyHandler(set_event_name, pass_user_data=True),
+                             CallbackQueryHandler(set_event_name_button, pass_user_data=True)],
             SET_EVENT_PLACE: [EmptyHandler(set_event_place, pass_user_data=True),
                               standard_callback_query_handler],
             SELECT_EVENT_PLACE: [EmptyHandler(select_event_place, pass_user_data=True),
