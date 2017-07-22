@@ -31,6 +31,8 @@ FORWARD = 'FORWARD'
 TRASH = 'TRASH'
 SKIP = 'SKIP'
 END = 'END'
+RESTORE = 'RESTORE'
+CANCEL = 'CANCEL'
 
 SET_LAST_NAME = 'SET_LAST_NAME'
 SET_FIRST_NAME = 'SET_FIRST_NAME'
@@ -453,6 +455,10 @@ def show_single_participation(bot, update, user_data):
         participants_count = models.AgitationEventParticipant.get_count(participant.event_id, participant.place_id)
         status = '%s Вы подали заявку на участие\nЗаписались %d%s' % (EMOJI_QUESTION, participants_count, EMOJI_HUMAN)
     keyboard = list()
+    if participant.canceled:
+        keyboard.append([InlineKeyboardButton('Восстановить заявку', callback_data=RESTORE)])
+    else:
+        keyboard.append([InlineKeyboardButton('Отказаться от участия', callback_data=CANCEL)])
     keyboard.append([InlineKeyboardButton('Назад', callback_data=BACK)])
     send_message_text(bot, update, user_data,
                       '%s\n%s' % (event_text, status),
@@ -462,10 +468,18 @@ def show_single_participation(bot, update, user_data):
 
 def show_single_participation_button(bot, update, user_data):
     query = update.callback_query
-    query.answer()
     if query.data == BACK:
+        query.answer()
         del user_data['participant_id']
         return SHOW_PARTICIPATIONS
+    elif query.data == CANCEL:
+        query.answer('Заявка отменена')
+        models.AgitationEventParticipant.cancel(user_data['participant_id'])
+        return
+    elif query.data == RESTORE:
+        query.answer('Заявка восстановлена')
+        models.AgitationEventParticipant.restore(user_data['participant_id'])
+        return
 
 
 EVENT_PAGE_SIZE = 5

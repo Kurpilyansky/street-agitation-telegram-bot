@@ -226,6 +226,14 @@ class AgitationEventParticipant(models.Model):
     def decline(cls, id):
         return cls.objects.filter(id=id).update(approved=False, declined=True)
 
+    @classmethod
+    def cancel(cls, id):
+        return cls.objects.filter(id=id).update(canceled=True)
+
+    @classmethod
+    def restore(cls, id):
+        return cls.objects.filter(id=id).update(canceled=False)
+
     def get_neighbours(self):
         return list(AgitationEventParticipant.objects.filter(event_id=self.event_id, place_id=self.place_id,
                                                              declined=False, canceled=False).all())
