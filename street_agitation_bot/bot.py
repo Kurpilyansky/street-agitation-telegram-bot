@@ -442,15 +442,16 @@ def show_single_participation(bot, update, user_data):
     elif participant.declined:
         status = EMOJI_NO + ' Вашу заявку отклонили'
     elif participant.approved:
-        status = EMOJI_OK + ' Вашу участие одобрили. Все заявки:'
+        participants = participant.get_neighbours()
+        status = EMOJI_OK + ' Вашу участие одобрили. Записались %d%s' % (len(participants), EMOJI_HUMAN)
         participant_texts = list()
-        for i, p in enumerate(participant.get_neighbours()):
+        for i, p in enumerate(participants):
             cur_status = EMOJI_OK if p.approved else EMOJI_QUESTION
             participant_texts.append('%d. %s %s' % (i + 1, p.agitator.full_name, cur_status))
         status = status + '\n' + '\n'.join(participant_texts)
     else:
         participants_count = models.AgitationEventParticipant.get_count(participant.event_id, participant.place_id)
-        status = '%s Вы подали заявку на участие\nВсего записалось %d человек' % (EMOJI_QUESTION, participants_count)
+        status = '%s Вы подали заявку на участие\nЗаписались %d%s' % (EMOJI_QUESTION, participants_count, EMOJI_HUMAN)
     keyboard = list()
     keyboard.append([InlineKeyboardButton('Назад', callback_data=BACK)])
     send_message_text(bot, update, user_data,
