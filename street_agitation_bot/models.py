@@ -3,6 +3,7 @@
 from django.db import models
 
 from street_agitation_bot import bot_settings, utils
+from street_agitation_bot.emoji import *
 
 
 class Region(models.Model):
@@ -203,6 +204,16 @@ class AgitationEventParticipant(models.Model):
     approved = models.BooleanField(default=False)
     declined = models.BooleanField(default=False)
     canceled = models.BooleanField(default=False)
+
+    @property
+    def emoji_status(self):
+        if self.canceled:
+            return EMOJI_NO
+        if self.approved:
+            return EMOJI_OK
+        if self.declined:
+            return EMOJI_NO
+        return EMOJI_QUESTION
 
     @classmethod
     def create(cls, agitator_id, event_id, place_id):

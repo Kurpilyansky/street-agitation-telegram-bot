@@ -1,4 +1,5 @@
 from street_agitation_bot import bot_settings, models, notifications, utils
+from street_agitation_bot.emoji import *
 
 import traceback
 
@@ -18,11 +19,6 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
                     level=logging.INFO)
 
 logger = logging.getLogger(__name__)
-
-EMOJI_OK = u'\U00002705'
-EMOJI_NO = u'\U0000274c'
-EMOJI_QUESTION = u'\U00002753'
-EMOJI_HUMAN = u'\U0001f471'
 
 YES = 'YES'
 NO = 'NO'
@@ -402,8 +398,7 @@ def show_participations(bot, update, user_data, region_id):
     keyboard = list()
     if participations:
         for p in participations:
-            status = EMOJI_OK if p.approved else (EMOJI_NO if p.declined else EMOJI_QUESTION)
-            p_text = status + " " + p.event.show(markdown=False) + " " + p.place.show(markdown=False)
+            p_text = p.emoji_status + " " + p.event.show(markdown=False) + " " + p.place.show(markdown=False)
             if p.event.place.region_id != region_id:
                 p_text = '*%s* %s' % (p.event.place.region.name, p_text)
             keyboard.append([InlineKeyboardButton(p_text, callback_data=str(p.id))])
@@ -440,20 +435,19 @@ def show_single_participation(bot, update, user_data):
         return SHOW_PARTICIPATIONS
     event_text = participant.event.show() + " " + participant.place.show()
     if participant.canceled:
-        status = EMOJI_NO + ' Вы отменили свою заявку'
+        status = 'Вы отменили свою заявку'
     elif participant.declined:
-        status = EMOJI_NO + ' Вашу заявку отклонили'
+        status = 'Вашу заявку отклонили'
     elif participant.approved:
         participants = participant.get_neighbours()
-        status = EMOJI_OK + ' Вашу участие одобрили. Записались %d%s' % (len(participants), EMOJI_HUMAN)
+        status = 'Вашу участие одобрили. Записались %d%s' % (len(participants), EMOJI_HUMAN)
         participant_texts = list()
         for i, p in enumerate(participants):
-            cur_status = EMOJI_OK if p.approved else EMOJI_QUESTION
-            participant_texts.append('%d. %s %s' % (i + 1, p.agitator.full_name, cur_status))
+            participant_texts.append('%d. %s %s' % (i + 1, p.agitator.full_name, p.emoji_status))
         status = status + '\n' + '\n'.join(participant_texts)
     else:
         participants_count = models.AgitationEventParticipant.get_count(participant.event_id, participant.place_id)
-        status = '%s Вы подали заявку на участие\nЗаписались %d%s' % (EMOJI_QUESTION, participants_count, EMOJI_HUMAN)
+        status = 'Вы подали заявку на участие\nЗаписались %d%s' % (participants_count, EMOJI_HUMAN)
     keyboard = list()
     if participant.canceled:
         keyboard.append([InlineKeyboardButton('Восстановить заявку', callback_data=RESTORE)])
@@ -461,7 +455,7 @@ def show_single_participation(bot, update, user_data):
         keyboard.append([InlineKeyboardButton('Отказаться от участия', callback_data=CANCEL)])
     keyboard.append([InlineKeyboardButton('Назад', callback_data=BACK)])
     send_message_text(bot, update, user_data,
-                      '%s\n%s' % (event_text, status),
+                      '%s\n%s %s' % (event_text, participant.emoji_status, status),
                       parse_mode="Markdown",
                       reply_markup=InlineKeyboardMarkup(keyboard))
 
@@ -500,8 +494,7 @@ def manage_events(bot, update, user_data, region_id):
             if applications:
                 lines = list()
                 for a in applications:
-                    status = EMOJI_OK if a.approved else (EMOJI_NO if a.declined else EMOJI_QUESTION)
-                    line = status + " " + a.place.show() + " " + a.agitator.show_full()
+                    line = a.emoji_status + " " + a.place.show() + " " + a.agitator.show_full()
                     lines.append(line)
                     keyboard.append([InlineKeyboardButton(EMOJI_OK + " " + a.agitator.full_name, callback_data=YES + str(a.id)),
                                      InlineKeyboardButton(EMOJI_NO + " " + a.agitator.full_name, callback_data=NO + str(a.id))])

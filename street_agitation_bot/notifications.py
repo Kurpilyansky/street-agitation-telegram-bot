@@ -1,5 +1,6 @@
 
 from street_agitation_bot import models, utils
+from street_agitation_bot.emoji import *
 
 from telegram import (InlineKeyboardButton, InlineKeyboardMarkup)
 
@@ -15,11 +16,19 @@ def participant_button(bot, update, groups):
 
     participant_id = groups[1]
     participant = (models.AgitationEventParticipant.objects.filter(id=participant_id)
-                   .select_related('event', 'event__place', 'event__place__region').first())
+                   .select_related('agitator', 'event', 'event__place', 'event__place__region').first())
     if not participant:
         query.answer(text='Данная заявка не найдена. Что-то пошло не так :(', show_alert=True)
         return
-    region = participant.event.place.region
+    agitator = participant.agitator
+    event = participant.event
+    place = participant.place
+    region = place.region
+    if participant.canceled:
+        query.message.edit_text('%s Заявка отменена\nРегион %s\n%s %s\nВолонтер %s'
+                                % (participant.emoji_status, region.show(), event.show(), place.show(), agitator.show_full()),
+                                parse_mode='Markdown')
+        return
     agitator_in_region = models.AgitatorInRegion.get(region.id, update.effective_user.id)
     if not (agitator_in_region and agitator_in_region.is_admin):
         query.answer(text='У вас нет прав на это действие', show_alert=True)
@@ -28,7 +37,7 @@ def participant_button(bot, update, groups):
     query.answer()
     if groups[0] == PARTICIPANT_CONFIRM:
         models.AgitationEventParticipant.approve(id=participant_id)
-        keyboard = [[InlineKeyboardButton(u'\U00002705 Подтвердить',
+        keyboard = [[InlineKeyboardButton(EMOJI_OK + ' Подтвердить',
                                           callback_data=PARTICIPANT_CONFIRM + participant_id)],
                     [InlineKeyboardButton('Отклонить',
                                           callback_data=PARTICIPANT_DECLINE + participant_id)]]
@@ -37,7 +46,7 @@ def participant_button(bot, update, groups):
         models.AgitationEventParticipant.decline(id=participant_id)
         keyboard = [[InlineKeyboardButton('Подтвердить',
                                           callback_data=PARTICIPANT_CONFIRM + participant_id)],
-                    [InlineKeyboardButton(u'\U0000274c Отклонить',
+                    [InlineKeyboardButton(EMOJI_NO + ' Отклонить',
                                           callback_data=PARTICIPANT_DECLINE + participant_id)]]
 
     query.message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(keyboard))
