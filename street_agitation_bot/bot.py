@@ -549,9 +549,9 @@ def apply_to_agitate(bot, update, user_data, region_id):
     for event in events:
         if event.id not in exclude_event_ids:
             any_event = True
-            keyboard.append([create_apply_to_agitate_button(event, event.place, True)])
+            keyboard.append([create_apply_to_agitate_button(event)])
 
-    if not any_event:
+    if not any_event and offset == 0:
         keyboard = _create_back_to_menu_keyboard()
         keyboard.inline_keyboard[0:0] = [[InlineKeyboardButton('Мои заявки', callback_data=SHOW_PARTICIPATIONS)]]
         send_message_text(bot, update, user_data,
@@ -606,7 +606,7 @@ def apply_to_agitate_place(bot, update, user_data, region_id):
         if subplaces:
             buttons = list()
             for p in subplaces:
-                buttons.append(create_apply_to_agitate_button(event, p, False))
+                buttons.append(create_apply_to_agitate_button(event, p))
             keyboard = utils.chunks(buttons, 2)
             keyboard.append([InlineKeyboardButton('Назад', callback_data=NO)])
             send_message_text(bot, update, user_data,
@@ -625,16 +625,20 @@ def apply_to_agitate_place(bot, update, user_data, region_id):
     user_data['place_ids'] = place_ids
 
 
-def create_apply_to_agitate_button(event, place, show_event_info):
-    text = place.show(markdown=False)
-    if show_event_info:
-        text = event.show(markdown=False) + " " + text
+def create_apply_to_agitate_button(event, place=None):
+    if not place:
+        button_data = str(event.id)
+        place = event.place
+        text = event.show(markdown=False) + " " + place.show(markdown=False)
+    else:
+        button_data = str(place.id)
+        text = place.show(markdown=False)
     if not place.subplaces:
         applies_text = str(models.AgitationEventParticipant.get_count(event.id, place.id))
         if event.agitators_limit:
             applies_text = "%s/%d" % (applies_text, event.agitators_limit)
         text = u'%s\U0001f471 %s' % (applies_text, text)
-    return InlineKeyboardButton(text, callback_data=str(place.id))
+    return InlineKeyboardButton(text, callback_data=button_data)
 
 
 def apply_to_agitate_place_button(bot, update, user_data):
