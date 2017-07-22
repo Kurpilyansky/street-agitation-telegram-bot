@@ -618,7 +618,7 @@ def apply_to_agitate_place(bot, update, user_data, region_id):
                          InlineKeyboardButton('Нет', callback_data=NO)]]
             send_message_text(bot, update, user_data,
                               '*Подтвердите, что ваш выбор*\n'
-                              'Вы хотите агитировать на %s?' % event.show(),
+                              'Вы хотите агитировать на %s %s?' % (event.show(), place.show()),
                               parse_mode="Markdown",
                               reply_markup=InlineKeyboardMarkup(keyboard))
         break
