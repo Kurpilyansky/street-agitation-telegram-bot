@@ -5,7 +5,7 @@ import traceback
 import re
 import collections
 from datetime import datetime, date, timedelta
-from telegram import (ReplyKeyboardMarkup, ReplyKeyboardRemove,
+from telegram import (ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove,
                       InlineKeyboardButton, InlineKeyboardMarkup,
                       InlineQueryResultArticle, TelegramError)
 from telegram.ext import (Updater, CommandHandler, MessageHandler, Filters, RegexHandler,
@@ -128,10 +128,16 @@ def set_first_name(bot, update, user_data):
 
 
 def set_phone_start(bot, update, user_data):
-    send_message_text(bot, update, user_data, 'Укажите ваш телефон')
+    send_message_text(bot, update, user_data, 'Укажите ваш телефон',
+                      reply_markup=ReplyKeyboardMarkup([[KeyboardButton('Отправить мой номер телефона', request_contact=True)]]))
 
 
-def set_phone(bot, update, user_data):
+def set_phone_contact(bot, update, user_data):
+    user_data["phone"] = update.message.contact.phone_number
+    return SAVE_PROFILE
+
+
+def set_phone_text(bot, update, user_data):
     user_data["phone"] = update.message.text
     return SAVE_PROFILE
 
@@ -151,6 +157,7 @@ def save_profile(bot, update, user_data):
         keyboard.inline_keyboard[0:0] = [[InlineKeyboardButton('Настройки', callback_data=SHOW_PROFILE)]]
     else:
         keyboard = InlineKeyboardMarkup([[InlineKeyboardButton('Выбрать регион', callback_data=SELECT_REGION)]])
+    send_message_text(bot, update, user_data, text, reply_markup=ReplyKeyboardRemove())
     send_message_text(bot, update, user_data, text, reply_markup=keyboard)
 
     del user_data['first_name']
@@ -976,7 +983,8 @@ def run_bot():
             SET_FIRST_NAME: [EmptyHandler(set_first_name_start, pass_user_data=True),
                             MessageHandler(Filters.text, set_first_name, pass_user_data=True)],
             SET_PHONE: [EmptyHandler(set_phone_start, pass_user_data=True),
-                        MessageHandler(Filters.text, set_phone, pass_user_data=True)],
+                        MessageHandler(Filters.contact, set_phone_contact, pass_user_data=True),
+                        MessageHandler(Filters.text, set_phone_text, pass_user_data=True)],
             SAVE_PROFILE: [EmptyHandler(save_profile, pass_user_data=True),
                            standard_callback_query_handler],
             SHOW_PROFILE: [EmptyHandler(show_profile, pass_user_data=True),
