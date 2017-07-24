@@ -35,7 +35,7 @@ class AgitatorAdmin(VersionAdmin):
     )
 
     search_fields = (
-        '=id',
+        '=telegram_id',
         'telegram',
         'last_name',
         'first_name',
