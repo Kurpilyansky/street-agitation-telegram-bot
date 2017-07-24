@@ -5,10 +5,14 @@ from django.db import models
 from street_agitation_bot import bot_settings, utils
 from street_agitation_bot.emoji import *
 
+from datetime import timedelta
+
 
 class Region(models.Model):
     name = models.CharField(max_length=100, blank=True, null=True, unique=True)
     registrations_chat_it = models.BigIntegerField()
+
+    timezone_delta = models.IntegerField(help_text='Разница с UTC в секундах, например, для UTC+3 указано +10800')
 
     is_public = models.BooleanField()
 
@@ -157,15 +161,16 @@ class AgitationEvent(models.Model):
         ordering = ['start_date', 'place_id']
 
     def show(self, markdown=True):
+        diff = timedelta(seconds=self.region.timezone_delta)
         if markdown:
             return "%s%s-%s, %s" % ("*ОТМЕНЕН* " if self.is_canceled else "",
-                                    self.start_date.strftime("%d.%m %H:%M"),
-                                    self.end_date.strftime("%H:%M"),
+                                    (self.start_date + diff).strftime("%d.%m %H:%M"),
+                                    (self.end_date + diff).strftime("%H:%M"),
                                     utils.escape_markdown(self.name))
         else:
             return "%s%s-%s, %s" % ("ОТМЕНЕН " if self.is_canceled else "",
-                                    self.start_date.strftime("%d.%m %H:%M"),
-                                    self.end_date.strftime("%H:%M"),
+                                    (self.start_date + diff).strftime("%d.%m %H:%M"),
+                                    (self.end_date + diff).strftime("%H:%M"),
                                     self.name)
 
     def __str__(self):

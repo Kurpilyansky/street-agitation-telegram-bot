@@ -364,10 +364,10 @@ def make_broadcast_confirm_button(bot, update, user_data, region_id):
 @region_decorator
 def show_schedule(bot, update, user_data, region_id):
     events = list(models.AgitationEvent.objects.filter(
-        start_date__gte=date.today(),
+        end_date__gte=datetime.now(),
         place__region_id=region_id,
         is_canceled=False
-    ).select_related('place'))
+    ).select_related('place', 'place__region'))
     if events:
         schedule_text = "\n".join(['%s %s' % (e.show(), e.place.show()) for e in events])
     else:
@@ -429,7 +429,7 @@ def show_single_participation(bot, update, user_data):
     if 'participant_id' not in user_data:
         return SHOW_PARTICIPATIONS
     participant = models.AgitationEventParticipant.objects.filter(
-        id=user_data['participant_id']).select_related('event', 'place').first()
+        id=user_data['participant_id']).select_related('event', 'place', 'event__place__region').first()
     if not participant or participant.agitator_id != agitator_id:
         del user_data['participant_id']
         return SHOW_PARTICIPATIONS
@@ -487,7 +487,7 @@ def manage_events(bot, update, user_data, region_id):
         return MENU
 
     if 'event_id' in user_data:
-        event = models.AgitationEvent.objects.filter(id=user_data['event_id']).first()
+        event = models.AgitationEvent.objects.filter(id=user_data['event_id']).select_related('place__region').first()
         if event:
             applications = list(models.AgitationEventParticipant.objects.filter(event_id=user_data['event_id']).all())
             keyboard = list()
@@ -517,7 +517,7 @@ def manage_events(bot, update, user_data, region_id):
         user_data['events_offset'] = 0
 
     offset = user_data['events_offset']
-    query_set = models.AgitationEvent.objects.filter(start_date__gte=date.today(), place__region_id=region_id)
+    query_set = models.AgitationEvent.objects.filter(start_date__gte=date.today(), place__region_id=region_id).select_related('place__region')
     events = list(query_set.select_related('place')[offset:offset + EVENT_PAGE_SIZE])
     keyboard = list()
     if offset > 0:
@@ -570,7 +570,7 @@ def cancel_event(bot, update, user_data, region_id):
         return MENU
     if 'event_id' not in user_data:
         return MENU
-    event = models.AgitationEvent.objects.filter(id=user_data['event_id']).first()
+    event = models.AgitationEvent.objects.filter(id=user_data['event_id']).select_related('place__region').first()
     if not event:
         del user_data['event_id']
         return MENU
@@ -601,16 +601,17 @@ def apply_to_agitate(bot, update, user_data, region_id):
     if 'events_offset' not in user_data:
         user_data['events_offset'] = 0
 
+    region = models.Region.get_by_id(region_id)
     agitator_id = update.effective_user.id
     abilities = models.AgitatorInRegion.get(region_id, agitator_id)
     offset = user_data['events_offset']
-    query_set = models.AgitationEvent.objects.filter(start_date__gte=date.today(),
+    query_set = models.AgitationEvent.objects.filter(end_date__gte=datetime.now(),
                                                      place__region_id=region_id,
                                                      is_canceled=False)
     events = list(query_set.select_related('place')[offset:offset + EVENT_PAGE_SIZE])
     participations = list(models.AgitationEventParticipant.objects.filter(
         agitator_id=agitator_id,
-        event__start_date__gte=date.today(),
+        event__end_date__gte=datetime.now(),
         event__place__region_id=region_id).all())
     exclude_event_ids = {p.event_id: True for p in participations}
     keyboard = list()
@@ -660,9 +661,8 @@ def apply_to_agitate_button(bot, update, user_data):
             return APPLY_TO_AGITATE_PLACE
 
 
-@region_decorator
-def apply_to_agitate_place(bot, update, user_data, region_id):
-    event = models.AgitationEvent.objects.filter(id=user_data['event_id']).first()
+def apply_to_agitate_place(bot, update, user_data):
+    event = models.AgitationEvent.objects.filter(id=user_data['event_id']).select_related('place__region').first()
     if not event:
         del user_data['event_id']
         return APPLY_TO_AGITATE
@@ -907,7 +907,7 @@ def set_event_time(bot, update, user_data):
 @region_decorator
 def create_event_series_confirm(bot, update, user_data, region_id):
     if 'place_id' in user_data:
-        place = models.AgitationPlace.objects.get(id=user_data['place_id'])
+        place = models.AgitationPlace.objects.select_related('region').get(id=user_data['place_id'])
         place.save()  # for update last_update_time
     else:
         location = user_data['location']
@@ -926,8 +926,8 @@ def create_event_series_confirm(bot, update, user_data, region_id):
         return cancel(bot, update, user_data)
     #TODO copypaste
     time_range = user_data['time_range']
-    from_seconds = (time_range[0] * 60 + time_range[1]) * 60
-    to_seconds = (time_range[2] * 60 + time_range[3]) * 60
+    from_seconds = (time_range[0] * 60 + time_range[1]) * 60 - place.region.timezone_delta
+    to_seconds = (time_range[2] * 60 + time_range[3]) * 60 - place.region.timezone_delta
     if to_seconds < from_seconds:
         to_seconds += 86400
     events = list()
@@ -964,11 +964,12 @@ def create_event_series_confirm_button(bot, update, user_data):
         return MENU
 
 
-def create_event_series(bot, update, user_data):
-    place = models.AgitationPlace.objects.get(id=user_data['place_id'])
+@region_decorator
+def create_event_series(bot, update, user_data, region_id):
+    place = models.AgitationPlace.objects.select_related('region').get(id=user_data['place_id'])
     time_range = user_data['time_range']
-    from_seconds = (time_range[0] * 60 + time_range[1]) * 60
-    to_seconds = (time_range[2] * 60 + time_range[3]) * 60
+    from_seconds = (time_range[0] * 60 + time_range[1]) * 60 - place.region.timezone_delta
+    to_seconds = (time_range[2] * 60 + time_range[3]) * 60 - place.region.timezone_delta
     if to_seconds < from_seconds:
         to_seconds += 86400
 
