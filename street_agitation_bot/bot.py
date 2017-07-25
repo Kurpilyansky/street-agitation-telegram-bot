@@ -192,9 +192,8 @@ def select_region(bot, update, user_data):
     regions = agitator.regions
     if not regions:
         return ADD_REGION
-    keyboard = list()
-    for region in regions:
-        keyboard.append([InlineKeyboardButton(region.name, callback_data=str(region.id))])
+    buttons = [InlineKeyboardButton(region.show(markdown=False), callback_data=str(region.id)) for region in regions]
+    keyboard = utils.chunks(buttons, 2)
     keyboard.append([InlineKeyboardButton('Добавить другой регион', callback_data=ADD_REGION)])
     send_message_text(bot, update, user_data, 'Выберите регион', reply_markup=InlineKeyboardMarkup(keyboard))
 
