@@ -64,9 +64,10 @@ class AgitatorInRegionAdmin(VersionAdmin):
 
     search_fields = (
         '=id',
-        'agitator__name',
+        '=agitator__telegram_id',
+        'agitator__last_name',
+        'agitator__first_name',
         'agitator__telegram',
-        'agitator__telegram_id',
     )
 
 
@@ -151,6 +152,14 @@ class ConversationStateAdmin(VersionAdmin):
     )
     list_filter = (
         'state',
+    )
+    search_fields = (
+        '=key',
+        '=agitator__telegram_id',
+        'state',
+        'agitator__telegram',
+        'agitator__last_name',
+        'agitator__first_name',
     )
 
 
