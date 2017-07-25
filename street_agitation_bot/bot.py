@@ -345,6 +345,8 @@ def make_broadcast_confirm_button(bot, update, user_data, region_id):
 
     broadcast_text = user_data['broadcast_text']
     del user_data['broadcast_text']
+    region = models.Region.get_by_id(region_id)
+    broadcast_text2 = '*%s*\n%s' % (region.show(), broadcast_text)
 
     query = update.callback_query
     query.answer()
@@ -352,7 +354,10 @@ def make_broadcast_confirm_button(bot, update, user_data, region_id):
         errors = list()
         for a in models.Agitator.objects.filter(agitatorinregion__region_id=region_id).all():
             try:
-                bot.send_message(a.telegram_id, broadcast_text)
+                cur_text = broadcast_text
+                if models.AgitatorInRegion.objects.filter(agitator_id=a.telegram_id).count() > 1:
+                    cur_text = broadcast_text2
+                bot.send_message(a.telegram_id, cur_text, parse_mode='Markdown')
             except TelegramError as e:
                 logger.error(e, exc_info=1)
                 errors.append(e)
