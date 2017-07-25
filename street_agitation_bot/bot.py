@@ -330,8 +330,8 @@ def make_broadcast(bot, update, user_data):
 
 def make_broadcast_confirm(bot, update, user_data):
     broadcast_text = user_data['broadcast_text']
-    text = '*Вы уверены, что хотите отправить всем пользователям следующее сообщение:*\n\n%s' % broadcast_text
-    keyboard = [[InlineKeyboardButton('Отправить?', callback_data=YES),
+    text = 'Вы уверены, что хотите отправить *всем пользователям вашего региона* следующее сообщение:\n\n%s' % broadcast_text
+    keyboard = [[InlineKeyboardButton('Отправить', callback_data=YES),
                  InlineKeyboardButton('Отмена', callback_data=NO)]]
     send_message_text(bot, update, user_data, text,
                       parse_mode='Markdown',
