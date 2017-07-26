@@ -488,7 +488,7 @@ def show_single_participation_button(bot, update, user_data):
         return
 
 
-EVENT_PAGE_SIZE = 5
+EVENT_PAGE_SIZE = 10
 
 
 @region_decorator
@@ -529,6 +529,8 @@ def manage_events(bot, update, user_data, region_id):
         user_data['events_offset'] = 0
 
     offset = user_data['events_offset']
+    if offset < 0:
+        offset = 0
     query_set = models.AgitationEvent.objects.filter(start_date__gte=date.today(), place__region_id=region_id).select_related('place__region')
     events = list(query_set.select_related('place')[offset:offset + EVENT_PAGE_SIZE])
     keyboard = list()
@@ -617,6 +619,8 @@ def apply_to_agitate(bot, update, user_data, region_id):
     agitator_id = update.effective_user.id
     abilities = models.AgitatorInRegion.get(region_id, agitator_id)
     offset = user_data['events_offset']
+    if offset < 0:
+        offset = 0
     query_set = models.AgitationEvent.objects.filter(end_date__gte=datetime.now(),
                                                      place__region_id=region_id,
                                                      is_canceled=False)
@@ -791,7 +795,7 @@ def set_event_place(bot, update, user_data):
                       reply_markup=InlineKeyboardMarkup(keyboard))
 
 
-PLACE_PAGE_SIZE = 5
+PLACE_PAGE_SIZE = 10
 
 
 @region_decorator
@@ -799,6 +803,8 @@ def select_event_place(bot, update, user_data, region_id):
     if "place_offset" not in user_data:
         user_data["place_offset"] = 0
     offset = user_data["place_offset"]
+    if offset < 0:
+        offset = 0
     query_set = models.AgitationPlace.objects.filter(region_id=region_id)
     places = query_set.order_by('-last_update_time')[offset:offset + PLACE_PAGE_SIZE]
     keyboard = [[InlineKeyboardButton("Назад", callback_data=BACK)]]
