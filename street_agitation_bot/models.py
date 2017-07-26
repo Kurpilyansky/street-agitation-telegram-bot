@@ -128,6 +128,8 @@ class AgitationPlace(models.Model):
 
     last_update_time = models.DateTimeField(auto_now=True)
 
+    post_apply_text = models.CharField(max_length=1000, null=True, blank=True)
+
     @property
     def subplaces(self):
         return list(AgitationPlace.objects.filter(hierarchy_sub_place__base_place_id=self.id)
@@ -222,8 +224,7 @@ class AgitationEventParticipant(models.Model):
 
     @classmethod
     def create(cls, agitator_id, event_id, place_id):
-        obj, created = cls.objects.update_or_create(agitator_id=agitator_id, event_id=event_id, place_id=place_id)
-        return created
+        return cls.objects.update_or_create(agitator_id=agitator_id, event_id=event_id, place_id=place_id)
 
     @classmethod
     def get(cls, agitator_id, event_id):

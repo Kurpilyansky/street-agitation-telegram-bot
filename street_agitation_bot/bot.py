@@ -443,15 +443,23 @@ def show_single_participation(bot, update, user_data):
     elif participant.declined:
         status = 'Вашу заявку отклонили'
     elif participant.approved:
-        participants = participant.get_neighbours()
-        status = 'Вашу участие одобрили. Записались %d%s' % (len(participants), EMOJI_HUMAN)
-        participant_texts = list()
-        for i, p in enumerate(participants):
-            participant_texts.append('%d. %s %s' % (i + 1, p.agitator.full_name, p.emoji_status))
-        status = status + '\n' + '\n'.join(participant_texts)
+        status = 'Ваше участие одобрили.'
+        if participant.place.post_apply_text:
+            status = '%s\n%s' % (status, participant.place.post_apply_text)
+        else:
+            participants = participant.get_neighbours()
+            status = '%s Записались %d%s' % (status, len(participants), EMOJI_HUMAN)
+            participant_texts = list()
+            for i, p in enumerate(participants):
+                participant_texts.append('%d. %s %s' % (i + 1, p.agitator.full_name, p.emoji_status))
+            status = status + '\n' + '\n'.join(participant_texts)
     else:
-        participants_count = models.AgitationEventParticipant.get_count(participant.event_id, participant.place_id)
-        status = 'Вы подали заявку на участие\nЗаписались %d%s' % (participants_count, EMOJI_HUMAN)
+        status = 'Вы подали заявку на участие'
+        if participant.place.post_apply_text:
+            status = '%s\n%s' % (status, participant.place.post_apply_text)
+        else:
+            participants_count = models.AgitationEventParticipant.get_count(participant.event_id, participant.place_id)
+            status = '%s\nЗаписались %d%s' % (status, participants_count, EMOJI_HUMAN)
     keyboard = list()
     if participant.canceled:
         keyboard.append([InlineKeyboardButton('Восстановить заявку', callback_data=RESTORE)])
@@ -731,13 +739,14 @@ def apply_to_agitate_place_button(bot, update, user_data):
         event_id = user_data['event_id']
         place_id = user_data['place_ids'][-1]
         agitator_id = update.effective_user.id
-        created = models.AgitationEventParticipant.create(agitator_id, event_id, place_id)
+        participant, created = models.AgitationEventParticipant.create(agitator_id, event_id, place_id)
         if created:
             notifications.notify_about_new_participant(bot, event_id, place_id, agitator_id)
         del user_data['event_id']
         del user_data['place_ids']
         query.answer('Вы записаны')
-        return SHOW_PARTICIPATIONS
+        user_data['participant_id'] = participant.id
+        return SHOW_SINGLE_PARTICIPATION
     else:
         match = re.match('^\d+$', query.data)
         if bool(match):
