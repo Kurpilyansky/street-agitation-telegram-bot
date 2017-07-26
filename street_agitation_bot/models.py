@@ -10,7 +10,7 @@ from datetime import timedelta
 
 class Region(models.Model):
     name = models.CharField(max_length=100, blank=True, null=True, unique=True)
-    registrations_chat_it = models.BigIntegerField()
+    registrations_chat_id = models.BigIntegerField()
 
     timezone_delta = models.IntegerField(help_text='Разница с UTC в секундах, например, для UTC+3 указано +10800')
 
@@ -129,6 +129,7 @@ class AgitationPlace(models.Model):
     last_update_time = models.DateTimeField(auto_now=True)
 
     post_apply_text = models.CharField(max_length=1000, null=True, blank=True)
+    registrations_chat_id = models.BigIntegerField(null=True, blank=True)
 
     @property
     def subplaces(self):

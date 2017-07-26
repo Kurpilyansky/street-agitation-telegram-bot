@@ -77,8 +77,14 @@ def notify_about_new_participant(bot, event_id, place_id, agitator_id):
     region = event.place.region
     keyboard = [[InlineKeyboardButton('Подтвердить', callback_data=PARTICIPANT_CONFIRM + str(participant.id))],
                 [InlineKeyboardButton('Отклонить', callback_data=PARTICIPANT_DECLINE + str(participant.id))]]
-    bot.send_message(region.registrations_chat_it,
-                     'Новая заявка на участие\nРегион %s\n%s %s\nВолонтер %s'
-                     % (region.show(), event.show(), place.show(), agitator.show_full()),
-                     parse_mode='Markdown',
-                     reply_markup=InlineKeyboardMarkup(keyboard))
+    chat_ids = [region.registrations_chat_id]
+    if event.place.registrations_chat_id:
+        chat_ids = [event.place.registrations_chat_id]
+        if place.registrations_chat_id:
+            chat_ids.append(place.registrations_chat_id)
+    for chat_id in chat_ids:
+        bot.send_message(chat_id,
+                         'Новая заявка на участие\nРегион %s\n%s %s\nВолонтер %s'
+                         % (region.show(), event.show(), place.show(), agitator.show_full()),
+                         parse_mode='Markdown',
+                         reply_markup=InlineKeyboardMarkup(keyboard))
