@@ -29,10 +29,10 @@ def participant_button(bot, update, groups):
                                 % (participant.emoji_status, region.show(), event.show(), place.show(), agitator.show_full()),
                                 parse_mode='Markdown')
         return
-    agitator_in_region = models.AgitatorInRegion.get(region.id, update.effective_user.id)
-    if not (agitator_in_region and agitator_in_region.is_admin):
-        query.answer(text='У вас нет прав на это действие', show_alert=True)
-        return
+    #agitator_in_region = models.AgitatorInRegion.get(region.id, update.effective_user.id)
+    #if not (agitator_in_region and agitator_in_region.is_admin):
+    #    query.answer(text='У вас нет прав на это действие', show_alert=True)
+    #    return
 
     query.answer()
     if groups[0] == PARTICIPANT_CONFIRM:
