@@ -9,3 +9,4 @@ def is_admin_user_id(user_id):
 
 
 error_chat_id = -1001147651737
+bug_reports_chat_id = -1001147651737

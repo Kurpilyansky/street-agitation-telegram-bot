@@ -1037,6 +1037,11 @@ def _create_back_to_menu_keyboard():
 def help(bot, update):
     update.message.reply_text('Help!', reply_markup=ReplyKeyboardRemove())
 
+    
+def send_bug_report(bot, update, user_data):
+    state = models.ConversationState.objects.filter(key=update.effective_user.id).first()
+    bot.send_message(bot_settings.bug_reports_chat_id, '%s\n\n%s' % (update, repr(state)))
+
 
 def error_handler(bot, update, error):
     logger.error('Update "%s" caused error "%s"' % (update, error), exc_info=1)
@@ -1124,7 +1129,8 @@ def run_bot():
                                   standard_callback_query_handler]
         },
         fallbacks=[CommandHandler('cancel', cancel, pass_user_data=True),
-                   CommandHandler("region", change_region, pass_user_data=True)]
+                   CommandHandler("region", change_region, pass_user_data=True),
+                   CommandHandler("send_bug_report", send_bug_report, pass_user_data=True)]
     )
 
     # dp.add_handler(InlineQueryHandler(select_event_place, pass_user_data=True))
