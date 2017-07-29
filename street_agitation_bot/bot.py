@@ -29,6 +29,7 @@ SKIP = 'SKIP'
 END = 'END'
 RESTORE = 'RESTORE'
 CANCEL = 'CANCEL'
+FORCE_BUTTON = 'FORCE'
 
 SET_LAST_NAME = 'SET_LAST_NAME'
 SET_FIRST_NAME = 'SET_FIRST_NAME'
@@ -85,7 +86,7 @@ def send_message_text(bot, update, user_data, *args, **kwargs):
     user_data.pop('last_bot_message_id', None)
     user_data.pop('last_bot_message_ts', None)
     cur_ts = datetime.now().timestamp()
-    if update.callback_query and cur_ts < last_bot_message_ts + 600:
+    if update.callback_query and update.effective_message.message_id == last_bot_message_id and cur_ts < last_bot_message_ts + 600:
         new_message = update.callback_query.edit_message_text(*args, **kwargs)
     else:
         if last_bot_message_id:
@@ -356,7 +357,10 @@ def make_broadcast_confirm_button(bot, update, user_data, region_id):
                 cur_text = broadcast_text
                 if models.AgitatorInRegion.objects.filter(agitator_id=a.telegram_id).count() > 1:
                     cur_text = broadcast_text2
-                bot.send_message(a.telegram_id, cur_text, parse_mode='Markdown')
+                reply_markup = None
+                if bot_settings.is_admin_user_id(update.effective_user.id):
+                    reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton('Записаться', callback_data=FORCE_BUTTON + '_' + APPLY_TO_AGITATE)]])
+                bot.send_message(a.telegram_id, cur_text, parse_mode='Markdown', reply_markup=reply_markup)
             except TelegramError as e:
                 logger.error(e, exc_info=1)
                 errors.append(e)
@@ -1034,6 +1038,12 @@ def _create_back_to_menu_keyboard():
     return InlineKeyboardMarkup([[InlineKeyboardButton("<< Меню", callback_data=MENU)]])
 
 
+def force_button_query_handler(bot, update, user_data):
+    query = update.callback_query
+    query.answer()
+    return query.data.split('_', 1)[1]
+
+
 def help(bot, update):
     update.message.reply_text('Help!', reply_markup=ReplyKeyboardRemove())
 
@@ -1128,6 +1138,7 @@ def run_bot():
             CREATE_EVENT_SERIES: [EmptyHandler(create_event_series, pass_user_data=True),
                                   standard_callback_query_handler]
         },
+        pre_fallbacks=[CallbackQueryHandler(force_button_query_handler, pattern='^%s_' % FORCE_BUTTON, pass_user_data=True)],
         fallbacks=[CommandHandler('cancel', cancel, pass_user_data=True),
                    CommandHandler("region", change_region, pass_user_data=True),
                    CommandHandler("send_bug_report", send_bug_report, pass_user_data=True)]

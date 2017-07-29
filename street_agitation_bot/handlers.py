@@ -111,6 +111,7 @@ class ConversationHandler(Handler):
                  states,
                  unknown_state_handler,
                  fallbacks,
+                 pre_fallbacks,
                  filters=None,
                  allow_reentry=False,
                  run_async_timeout=None,
@@ -125,6 +126,7 @@ class ConversationHandler(Handler):
 
         self.unknown_state_handler = unknown_state_handler
 
+        self.pre_fallbacks = pre_fallbacks
         self.fallbacks = fallbacks
         """:type: list[telegram.ext.Handler]"""
 
@@ -229,13 +231,19 @@ class ConversationHandler(Handler):
 
         handler = None
 
+        if state is not None:
+            for pre_fallback in self.pre_fallbacks:
+                if pre_fallback.check_update(update):
+                    handler = pre_fallback
+                    break
+
+
         # Search entry points for a match
-        if state is None or self.allow_reentry:
+        if not handler and (state is None or self.allow_reentry):
             for entry_point in self.entry_points:
                 if entry_point.check_update(update):
                     handler = entry_point
                     break
-
             else:
                 if state is None:
                     return False
