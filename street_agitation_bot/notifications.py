@@ -62,7 +62,7 @@ def register_handlers(dispatcher):
 def notify_about_new_registration(bot, region_id, agitator_id, text):
     region = models.Region.get_by_id(region_id)
     agitator = models.Agitator.find_by_id(agitator_id)
-    bot.send_message(region.registrations_chat_it,
+    bot.send_message(region.registrations_chat_id,
                      'Новая анкета\nРегион %s\n%s%s'
                      % (region.show(), agitator.show_full(), text),
                      parse_mode="Markdown")
