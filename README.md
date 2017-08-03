@@ -23,7 +23,7 @@ Then load it locally:
 
 Run bot:
 
-    set valid BOT\_TOKEN in bot\_settings.py
+    set valid BOT_TOKEN in bot_settings.py
     $ python manage.py run_bot
    
 Run web server (database view):
