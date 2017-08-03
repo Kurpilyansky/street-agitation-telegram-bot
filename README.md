@@ -22,10 +22,12 @@ Then load it locally:
     $ python src/web/manage.py loaddata db.json
 
 Run bot:
+
     set valid BOT\_TOKEN in bot\_settings.py
     $ python manage.py run_bot
    
 Run web server (database view):
+
     $ python manage.py createsuperuser # only at first time
     $ python manage.py runserver
     Open http://localhost:8000/admin in browser
