@@ -784,6 +784,8 @@ def set_event_name_button(bot, update, user_data):
     query.answer()
     if query.data == MENU:
         return MENU
+    if query.data == SET_EVENT_NAME:
+        return  # double click on button - ignore second click
     user_data['event_name'] = query.data
     return SET_EVENT_PLACE
 
