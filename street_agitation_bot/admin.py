@@ -108,12 +108,13 @@ class AgitationPlaceHierarchyAdmin(VersionAdmin):
 class AgitationEventAdmin(VersionAdmin):
     list_display = (
         'id',
-        'region',
+        'name',
         'place',
         'start_date',
         'end_date',
     )
     list_filter = (
+        'place__region',
     )
 
     search_fields = (
