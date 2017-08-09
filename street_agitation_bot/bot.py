@@ -772,6 +772,7 @@ def apply_to_agitate_place_button(bot, update, user_data):
 def set_event_name(bot, update, user_data):
     keyboard = [[InlineKeyboardButton('Куб', callback_data='Куб'),
                  InlineKeyboardButton('Автокуб', callback_data='Автокуб')],
+                [InlineKeyboardButton('Агитпрогулка', callback_data='Агитпрогулка')],
                 [InlineKeyboardButton("Отмена", callback_data=MENU)]]
     send_message_text(bot, update, user_data,
                       "*Укажите тип ивента*",
