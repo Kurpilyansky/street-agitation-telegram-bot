@@ -154,6 +154,8 @@ class AgitationEvent(models.Model):
 
     master = models.ForeignKey(Agitator)
 
+    need_cube = models.BooleanField(null=False, blank=False)
+
     is_canceled = models.BooleanField(default=False)
 
     agitators_limit = models.IntegerField(null=True, blank=True)

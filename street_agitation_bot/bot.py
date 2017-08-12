@@ -935,10 +935,12 @@ def _create_events(user_data):
         # TODO timezone
         event_date = date(year=date_tuple[0], month=date_tuple[1], day=date_tuple[2])
         event_datetime = datetime.combine(event_date, datetime.min.time())
+        event_name = user_data['event_name']
         event = models.AgitationEvent(
             master=master,
             place=place,
-            name=user_data['event_name'],
+            name=event_name,
+            need_cube=(event_name == 'Куб'),  # TODO small hack
             start_date=event_datetime + timedelta(seconds=from_seconds),
             end_date=event_datetime + timedelta(seconds=to_seconds),
         )
