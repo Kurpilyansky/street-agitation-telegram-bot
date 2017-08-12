@@ -40,21 +40,30 @@ def safe_delete_message(bot, chat_id, message_id):
 
 
 def send_message_text(bot, update, user_data, *args, **kwargs):
-    last_bot_message_id = user_data.get('last_bot_message_id')
-    last_bot_message_ts = user_data.get('last_bot_message_ts', 0)
+    last_bot_message_ids = user_data.get('last_bot_message_id', None)
+    if not last_bot_message_ids:
+        last_bot_message_ids = []
+    elif not isinstance(last_bot_message_ids, list):
+        last_bot_message_ids = [last_bot_message_ids]
+
     user_data.pop('last_bot_message_id', None)
     user_data.pop('last_bot_message_ts', None)
+    location = kwargs.get('location', {})
+    kwargs.pop('location', None)
     cur_ts = datetime.now().timestamp()
-    if update.callback_query and update.effective_message.message_id == last_bot_message_id and cur_ts < last_bot_message_ts + 600:
-        try:
-            new_message = update.callback_query.edit_message_text(*args, **kwargs)
-        except telegram.error.BadRequest:
-            return  # ignore 'Message is not modified'
-    else:
-        if last_bot_message_id:
-            safe_delete_message(bot, update.effective_chat.id, last_bot_message_id)
+    for message_id in last_bot_message_ids:
+        safe_delete_message(bot, update.effective_chat.id, message_id)
+    new_message_ids = []
+    if location:
+        kwargs2 = kwargs.copy()
+        if args:
+            kwargs2.pop('reply_markup', None)
+        new_message = update.effective_message.reply_location(location['latitude'], location['longitude'], **kwargs2)
+        new_message_ids.append(new_message.message_id)
+    if args:
         new_message = update.effective_message.reply_text(*args, **kwargs)
-    user_data['last_bot_message_id'] = new_message.message_id
+        new_message_ids.append(new_message.message_id)
+    user_data['last_bot_message_id'] = new_message_ids
     user_data['last_bot_message_ts'] = cur_ts
 
 
@@ -440,6 +449,7 @@ def show_single_participation(bot, update, user_data):
     keyboard.append([InlineKeyboardButton('Назад', callback_data=BACK)])
     send_message_text(bot, update, user_data,
                       '%s\n%s %s' % (event_text, participant.emoji_status(), status),
+                      location=participant.place.get_location(),
                       parse_mode="Markdown",
                       reply_markup=InlineKeyboardMarkup(keyboard))
 
@@ -494,6 +504,7 @@ def manage_events(bot, update, user_data, region_id):
 
             send_message_text(bot, update, user_data,
                               event.show() + '\n\n' + text,
+                              location=event.place.get_location(),
                               parse_mode="Markdown",
                               reply_markup=InlineKeyboardMarkup(keyboard))
             return
@@ -569,6 +580,7 @@ def cancel_event(bot, update, user_data, region_id):
                  InlineKeyboardButton('Нет', callback_data=NO)]]
     send_message_text(bot, update, user_data,
                       event.show() + '\n*Вы уверены, что хотите отменить мероприятие?*',
+                      location=event.place.get_location(),
                       parse_mode="Markdown",
                       reply_markup=InlineKeyboardMarkup(keyboard))
 
@@ -681,6 +693,7 @@ def apply_to_agitate_place(bot, update, user_data):
             send_message_text(bot, update, user_data,
                               '*Подтвердите, что ваш выбор*\n'
                               'Вы хотите агитировать на %s %s?' % (event.show(), place.show()),
+                              location=place.get_location(),
                               parse_mode="Markdown",
                               reply_markup=InlineKeyboardMarkup(keyboard))
         break
@@ -975,6 +988,7 @@ def create_event_series_confirm(bot, update, user_data, region_id):
     keyboard = [[InlineKeyboardButton('Создать', callback_data=YES),
                  InlineKeyboardButton('Отменить', callback_data=NO)]]
     send_message_text(bot, update, user_data, text,
+                      location=events[0].place.get_location(),
                       parse_mode="Markdown",
                       reply_markup=InlineKeyboardMarkup(keyboard))
 
@@ -1002,7 +1016,10 @@ def create_event_series(bot, update, user_data, region_id):
     text = "\n".join(["Добавлено:",
                       "Ответственный: %s" % events[0].master.show_full()] +
                      ['%s %s' % (e.show(), e.place.show()) for e in events])
-    send_message_text(bot, update, user_data, text, parse_mode="Markdown", reply_markup=_create_back_to_menu_keyboard())
+    send_message_text(bot, update, user_data, text,
+                      location=events[0].place.get_location(),
+                      parse_mode="Markdown",
+                      reply_markup=_create_back_to_menu_keyboard())
 
     del user_data['dates']
     del user_data['time_range']

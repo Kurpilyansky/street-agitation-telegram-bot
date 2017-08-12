@@ -131,6 +131,11 @@ class AgitationPlace(models.Model):
     post_apply_text = models.CharField(max_length=1000, null=True, blank=True)
     registrations_chat_id = models.BigIntegerField(null=True, blank=True)
 
+    def get_location(self):
+        if self.geo_latitude and self.geo_longitude:
+            return {'latitude': self.geo_latitude, 'longitude': self.geo_longitude}
+        return None
+
     @property
     def subplaces(self):
         return list(AgitationPlace.objects.filter(hierarchy_sub_place__base_place_id=self.id)
