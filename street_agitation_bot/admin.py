@@ -110,6 +110,7 @@ class AgitationEventAdmin(VersionAdmin):
         'id',
         'name',
         'place',
+        'master',
         'start_date',
         'end_date',
     )
@@ -118,6 +119,9 @@ class AgitationEventAdmin(VersionAdmin):
     )
 
     search_fields = (
+        'master__telegram',
+        'master__first_name',
+        'master__last_name',
         'place__address',
         'place__region__name',
     )

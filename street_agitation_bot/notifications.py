@@ -2,6 +2,8 @@
 from street_agitation_bot import models, utils
 from street_agitation_bot.emoji import *
 
+from street_agitation_bot.bot_constants import *
+
 import telegram
 from telegram import (InlineKeyboardButton, InlineKeyboardMarkup)
 
@@ -67,13 +69,15 @@ def notify_about_new_registration(bot, region_id, agitator_id, text):
                      % (region.show(), agitator.show_full(), text),
                      parse_mode="Markdown")
 
-
-def notify_about_new_participant(bot, event_id, place_id, agitator_id):
-    agitator = models.Agitator.find_by_id(agitator_id)
-    event = (models.AgitationEvent.objects.filter(id=event_id)
-             .select_related('place', 'place__region').first())
-    place = models.AgitationPlace.objects.filter(id=place_id).first()
-    participant = models.AgitationEventParticipant.get(agitator_id, event.id)
+def _notify_about_participant(bot, participant_id, text):
+    participant = models.AgitationEventParticipant.objects.filter(
+                    id=participant_id
+                  ).select_related('place', 'event', 'agitator').first()
+    if not participant:
+        return
+    event = participant.event
+    place = participant.place
+    agitator = participant.agitator
     region = event.place.region
     keyboard = [[InlineKeyboardButton('Подтвердить', callback_data=PARTICIPANT_CONFIRM + str(participant.id))],
                 [InlineKeyboardButton('Отклонить', callback_data=PARTICIPANT_DECLINE + str(participant.id))]]
@@ -82,9 +86,27 @@ def notify_about_new_participant(bot, event_id, place_id, agitator_id):
         chat_ids = [event.place.registrations_chat_id]
         if place.registrations_chat_id:
             chat_ids.append(place.registrations_chat_id)
+    full_text = '%s %s\nРегион %s\n%s %s' % (
+        agitator.show_full(), text, region.show(), event.show(), place.show())
     for chat_id in chat_ids:
         bot.send_message(chat_id,
-                         'Новая заявка на участие\nРегион %s\n%s %s\nВолонтер %s'
-                         % (region.show(), event.show(), place.show(), agitator.show_full()),
+                         text=full_text,
                          parse_mode='Markdown',
                          reply_markup=InlineKeyboardMarkup(keyboard))
+    bot.send_message(event.master.telegram_id,
+                     text='%s %s в %s %s' % (agitator.full_name, text, event.show(), place.show()),
+                     parse_mode='Markdown',
+                     reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(
+                         'Посмотреть все заявки', callback_data=SHOW_EVENT_FOR_MASTER+str(event.id))]]))
+
+
+def notify_about_new_participant(bot, participant_id):
+    _notify_about_participant(bot, participant_id, 'подал заявку на участие')
+
+
+def notify_about_cancellation_participation(bot, participant_id):
+    _notify_about_participant(bot, participant_id, 'отменил заявку на участие')
+
+
+def notify_about_restoration_participation(bot, participant_id):
+    _notify_about_participant(bot, participant_id, 'восстановил заявку на участие')

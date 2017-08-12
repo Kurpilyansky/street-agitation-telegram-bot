@@ -12,6 +12,7 @@ from telegram import (ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove,
                       InlineQueryResultArticle, TelegramError)
 from telegram.ext import (Updater, CommandHandler, MessageHandler, Filters, RegexHandler,
                           CallbackQueryHandler, InlineQueryHandler)
+from street_agitation_bot.bot_constants import *
 from street_agitation_bot.handlers import (ConversationHandler, EmptyHandler)
 import logging
 
@@ -21,50 +22,6 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 
 logger = logging.getLogger(__name__)
 
-YES = 'YES'
-NO = 'NO'
-BACK = 'BACK'
-FORWARD = 'FORWARD'
-TRASH = 'TRASH'
-SKIP = 'SKIP'
-END = 'END'
-RESTORE = 'RESTORE'
-CANCEL = 'CANCEL'
-FORCE_BUTTON = 'FORCE'
-
-SET_LAST_NAME = 'SET_LAST_NAME'
-SET_FIRST_NAME = 'SET_FIRST_NAME'
-SET_PHONE = 'SET_PHONE'
-SAVE_PROFILE = 'SAVE_PROFILE'
-SHOW_PROFILE = 'SHOW_PROFILE'
-
-SELECT_REGION = 'SELECT_REGION'
-ADD_REGION = 'ADD_REGION'
-SET_ABILITIES = 'SET_ABILITIES'
-SAVE_ABILITIES = 'SAVE_ABILITIES'
-
-MENU = 'MENU'
-MAKE_BROADCAST = 'MAKE_BROADCAST'
-MAKE_BROADCAST_CONFIRM = 'MAKE_BROADCAST_CONFIRM'
-SCHEDULE = 'SCHEDULE'
-CUBE_APPLICATION = 'CUBE_APPLICATION'
-APPLY_TO_AGITATE = 'APPLY_TO_AGITATE'
-APPLY_TO_AGITATE_PLACE = 'APPLY_TO_AGITATE_PLACE'
-SHOW_PARTICIPATIONS = 'SHOW_PARTICIPATIONS'
-SHOW_SINGLE_PARTICIPATION = 'SHOW_SINGLE_PARTICIPATION'
-MANAGE_EVENTS = 'MANAGE_EVENTS'
-CANCEL_EVENT = 'CANCEL_EVENT'
-SET_EVENT_NAME = 'SET_EVENT_NAME'
-SET_EVENT_MASTER = 'SET_EVENT_MASTER'
-SET_EVENT_PLACE = 'SET_EVENT_PLACE'
-SELECT_EVENT_PLACE = 'SELECT_EVENT_PLACE'
-SET_PLACE_ADDRESS = 'SET_PLACE_ADDRESS'
-SET_PLACE_LOCATION = 'SET_PLACE_LOCATION'
-SELECT_DATES = 'SELECT_DATES'
-SET_EVENT_TIME = 'SET_EVENT_TIME'
-CREATE_EVENT_SERIES_CONFIRM = 'CREATE_EVENT_SERIES_CONFIRM'
-CREATE_EVENT_SERIES = 'CREATE_EVENT_SERIES'
-
 
 def region_decorator(func):
     def wrapper(bot, update, user_data, *args, **kwargs):
@@ -73,6 +30,13 @@ def region_decorator(func):
         return func(bot, update, user_data, region_id=int(user_data['region_id']), *args, **kwargs)
 
     return wrapper
+
+
+def safe_delete_message(bot, chat_id, message_id):
+    try:
+        bot.delete_message(chat_id, message_id)
+    except telegram.error.BadRequest as e:
+        pass  # ignore 'Message can't be deleted'
 
 
 def send_message_text(bot, update, user_data, *args, **kwargs):
@@ -88,10 +52,7 @@ def send_message_text(bot, update, user_data, *args, **kwargs):
             return  # ignore 'Message is not modified'
     else:
         if last_bot_message_id:
-            try:
-                bot.delete_message(update.effective_chat.id, last_bot_message_id)
-            except telegram.error.BadRequest:
-                pass  # ignore 'Message can't be deleted'
+            safe_delete_message(bot, update.effective_chat.id, last_bot_message_id)
         new_message = update.effective_message.reply_text(*args, **kwargs)
     user_data['last_bot_message_id'] = new_message.message_id
     user_data['last_bot_message_ts'] = cur_ts
@@ -485,17 +446,20 @@ def show_single_participation(bot, update, user_data):
 
 def show_single_participation_button(bot, update, user_data):
     query = update.callback_query
+    participant_id = user_data['participant_id']
     if query.data == BACK:
         query.answer()
         del user_data['participant_id']
         return SHOW_PARTICIPATIONS
     elif query.data == CANCEL:
         query.answer('Заявка отменена')
-        models.AgitationEventParticipant.cancel(user_data['participant_id'])
+        models.AgitationEventParticipant.cancel(participant_id)
+        notifications.notify_about_cancellation_participation(bot, participant_id)
         return
     elif query.data == RESTORE:
         query.answer('Заявка восстановлена')
-        models.AgitationEventParticipant.restore(user_data['participant_id'])
+        models.AgitationEventParticipant.restore(participant_id)
+        notifications.notify_about_restoration_participation(bot, participant_id)
         return
 
 
@@ -756,7 +720,7 @@ def apply_to_agitate_place_button(bot, update, user_data):
         agitator_id = update.effective_user.id
         participant, created = models.AgitationEventParticipant.create(agitator_id, event_id, place_id)
         if created:
-            notifications.notify_about_new_participant(bot, event_id, place_id, agitator_id)
+            notifications.notify_about_new_participant(bot, participant.id)
         del user_data['event_id']
         del user_data['place_ids']
         query.answer('Вы записаны')
@@ -1070,6 +1034,18 @@ def force_button_query_handler(bot, update, user_data):
     return query.data.split('_', 1)[1]
 
 
+def show_event_for_master(bot, update, user_data, groups):
+    query = update.callback_query
+    event_id = int(groups[0])
+    participant = models.AgitationEventParticipant.get(update.effective_user.id, event_id)
+    if participant:
+        query.answer()
+        safe_delete_message(bot, update.effective_chat.id, update.effective_message.message_id)
+        user_data['participant_id'] = participant.id
+        return SHOW_SINGLE_PARTICIPATION
+    query.answer('Что-то пошло не так')
+
+
 def help(bot, update):
     update.message.reply_text('Help!', reply_markup=ReplyKeyboardRemove())
 
@@ -1168,7 +1144,11 @@ def run_bot():
             CREATE_EVENT_SERIES: [EmptyHandler(create_event_series, pass_user_data=True),
                                   standard_callback_query_handler]
         },
-        pre_fallbacks=[CallbackQueryHandler(force_button_query_handler, pattern='^%s_' % FORCE_BUTTON, pass_user_data=True)],
+        pre_fallbacks=[CallbackQueryHandler(force_button_query_handler, pattern='^%s_' % FORCE_BUTTON, pass_user_data=True),
+                       CallbackQueryHandler(show_event_for_master,
+                                            pattern='^%s(\d)+$' % SHOW_EVENT_FOR_MASTER,
+                                            pass_groups=True,
+                                            pass_user_data=True)],
         fallbacks=[CommandHandler('cancel', cancel, pass_user_data=True),
                    CommandHandler("region", change_region, pass_user_data=True),
                    CommandHandler("send_bug_report", send_bug_report, pass_user_data=True)]
