@@ -74,13 +74,6 @@ def region_decorator(func):
     return wrapper
 
 
-def delete_inline_keyboard(bot, chat_id, message_id):
-    try:
-        bot.edit_message_reply_markup(chat_id=chat_id, message_id=message_id, reply_markup=None)
-    except TelegramError:
-        pass  # TODO caused error "Message is not modified"
-
-
 def send_message_text(bot, update, user_data, *args, **kwargs):
     last_bot_message_id = user_data.get('last_bot_message_id')
     last_bot_message_ts = user_data.get('last_bot_message_ts', 0)
@@ -88,7 +81,10 @@ def send_message_text(bot, update, user_data, *args, **kwargs):
     user_data.pop('last_bot_message_ts', None)
     cur_ts = datetime.now().timestamp()
     if update.callback_query and update.effective_message.message_id == last_bot_message_id and cur_ts < last_bot_message_ts + 600:
-        new_message = update.callback_query.edit_message_text(*args, **kwargs)
+        try:
+            new_message = update.callback_query.edit_message_text(*args, **kwargs)
+        except telegram.error.BadRequest:
+            return  # ignore 'Message is not modified'
     else:
         if last_bot_message_id:
             try:
