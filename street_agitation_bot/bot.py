@@ -1080,6 +1080,8 @@ def send_bug_report(bot, update, user_data):
 
 
 def error_handler(bot, update, error):
+    if not update:
+        return
     logger.error('Update "%s" caused error "%s"' % (update, error), exc_info=1)
     try:
         bot.send_message(bot_settings.error_chat_id, 'Update "%s" caused error\n%s' % (update, traceback.format_exc()))
