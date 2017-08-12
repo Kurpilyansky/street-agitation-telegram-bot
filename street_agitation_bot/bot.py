@@ -55,6 +55,7 @@ SHOW_SINGLE_PARTICIPATION = 'SHOW_SINGLE_PARTICIPATION'
 MANAGE_EVENTS = 'MANAGE_EVENTS'
 CANCEL_EVENT = 'CANCEL_EVENT'
 SET_EVENT_NAME = 'SET_EVENT_NAME'
+SET_EVENT_MASTER = 'SET_EVENT_MASTER'
 SET_EVENT_PLACE = 'SET_EVENT_PLACE'
 SELECT_EVENT_PLACE = 'SELECT_EVENT_PLACE'
 SET_PLACE_ADDRESS = 'SET_PLACE_ADDRESS'
@@ -455,7 +456,13 @@ def show_single_participation(bot, update, user_data):
             status = '%s Записались %d%s' % (status, len(participants), EMOJI_HUMAN)
             participant_texts = list()
             for i, p in enumerate(participants):
-                participant_texts.append('%d. %s %s' % (i + 1, p.agitator.full_name, p.emoji_status()))
+                if p.agitator_id == p.event.master_id:
+                    text = EMOJI_CROWN + ' ' + p.agitator.show_full()
+                elif agitator_id == p.event.master_id:
+                    text = p.agitator.show_full()
+                else:
+                    text = p.agitator.full_name
+                participant_texts.append('%d. %s %s' % (i + 1, p.emoji_status(), text))
             status = status + '\n' + '\n'.join(participant_texts)
     else:
         status = 'Вы подали заявку на участие'
@@ -788,8 +795,28 @@ def set_event_name_button(bot, update, user_data):
     if query.data == SET_EVENT_NAME:
         return  # double click on button - ignore second click
     user_data['event_name'] = query.data
-    return SET_EVENT_PLACE
+    return SET_EVENT_MASTER
 
+
+def set_event_master_start(bot, update, user_data):
+    send_message_text(bot, update, user_data, 'Укажите волонтера, ответственного за этот ивент')
+
+
+def set_event_master_text(bot, update, user_data):
+    message = update.effective_message
+    if len(message.entities) != 1:
+        return
+    entity = message.entities[0]
+    if entity.type == 'mention':
+        agitator_username = str(message.text[entity.offset:][:entity.length][1:])
+        agitator = models.Agitator.objects.filter(telegram=agitator_username).first()
+    elif entity.type == 'text_mention':
+        agitator = models.Agitator.find_by_id(entity.user.id)
+    else:
+        agitator = None
+    if agitator:
+        user_data['master_telegram_id'] = agitator.telegram_id
+        return SET_EVENT_PLACE
 
 def set_event_place(bot, update, user_data):
     if 'place_id' in user_data:
@@ -930,6 +957,31 @@ def set_event_time(bot, update, user_data):
         return CREATE_EVENT_SERIES_CONFIRM
 
 
+def _create_events(user_data):
+    place = models.AgitationPlace.objects.select_related('region').get(id=user_data['place_id'])
+    master = models.Agitator.find_by_id(user_data['master_telegram_id'])
+    time_range = user_data['time_range']
+    from_seconds = (time_range[0] * 60 + time_range[1]) * 60 - place.region.timezone_delta
+    to_seconds = (time_range[2] * 60 + time_range[3]) * 60 - place.region.timezone_delta
+    if to_seconds < from_seconds:
+        to_seconds += 86400
+
+    events = list()
+    for date_tuple in user_data['dates']:
+        # TODO timezone
+        event_date = date(year=date_tuple[0], month=date_tuple[1], day=date_tuple[2])
+        event_datetime = datetime.combine(event_date, datetime.min.time())
+        event = models.AgitationEvent(
+            master=master,
+            place=place,
+            name=user_data['event_name'],
+            start_date=event_datetime + timedelta(seconds=from_seconds),
+            end_date=event_datetime + timedelta(seconds=to_seconds),
+        )
+        events.append(event)
+    return events
+
+
 @region_decorator
 def create_event_series_confirm(bot, update, user_data, region_id):
     if 'place_id' in user_data:
@@ -950,25 +1002,9 @@ def create_event_series_confirm(bot, update, user_data, region_id):
 
     if place.region_id != region_id:
         return cancel(bot, update, user_data)
-    #TODO copypaste
-    time_range = user_data['time_range']
-    from_seconds = (time_range[0] * 60 + time_range[1]) * 60 - place.region.timezone_delta
-    to_seconds = (time_range[2] * 60 + time_range[3]) * 60 - place.region.timezone_delta
-    if to_seconds < from_seconds:
-        to_seconds += 86400
-    events = list()
-    for date_tuple in user_data['dates']:
-        # TODO timezone
-        event_date = date(year=date_tuple[0], month=date_tuple[1], day=date_tuple[2])
-        event_datetime = datetime.combine(event_date, datetime.min.time())
-        event = models.AgitationEvent(
-            place=place,
-            name=user_data['event_name'],
-            start_date=event_datetime + timedelta(seconds=from_seconds),
-            end_date=event_datetime + timedelta(seconds=to_seconds),
-        )
-        events.append(event)
-    text = "\n".join(["*Вы уверены, что хотите добавить события?*"] +
+    events = _create_events(user_data)
+    text = "\n".join(["*Вы уверены, что хотите добавить события?*",
+                      "Ответственный: %s" % events[0].master.show_full()] +
                      ['%s %s' % (e.show(), place.show()) for e in events])
     keyboard = [[InlineKeyboardButton('Создать', callback_data=YES),
                  InlineKeyboardButton('Отменить', callback_data=NO)]]
@@ -987,32 +1023,19 @@ def create_event_series_confirm_button(bot, update, user_data):
         del user_data['time_range']
         del user_data['place_id']
         del user_data['event_name']
+        del user_data['master_telegram_id']
         return MENU
 
 
 @region_decorator
 def create_event_series(bot, update, user_data, region_id):
-    place = models.AgitationPlace.objects.select_related('region').get(id=user_data['place_id'])
-    time_range = user_data['time_range']
-    from_seconds = (time_range[0] * 60 + time_range[1]) * 60 - place.region.timezone_delta
-    to_seconds = (time_range[2] * 60 + time_range[3]) * 60 - place.region.timezone_delta
-    if to_seconds < from_seconds:
-        to_seconds += 86400
-
-    events = list()
-    for date_tuple in user_data['dates']:
-        # TODO timezone
-        event_date = date(year=date_tuple[0], month=date_tuple[1], day=date_tuple[2])
-        event_datetime = datetime.combine(event_date, datetime.min.time())
-        event = models.AgitationEvent(
-            place=place,
-            name=user_data['event_name'],
-            start_date=event_datetime + timedelta(seconds=from_seconds),
-            end_date=event_datetime + timedelta(seconds=to_seconds),
-        )
-        event.save()
-        events.append(event)
-    text = "\n".join(["Добавлено:"] + ['%s %s' % (e.show(), place.show()) for e in events])
+    events = _create_events(user_data)
+    for e in events:
+        e.save()
+        models.AgitationEventParticipant.create(e.master.telegram_id, e.id, e.place.id)[0].make_approve()
+    text = "\n".join(["Добавлено:",
+                      "Ответственный: %s" % events[0].master.show_full()] +
+                     ['%s %s' % (e.show(), e.place.show()) for e in events])
     send_message_text(bot, update, user_data, text, parse_mode="Markdown", reply_markup=_create_back_to_menu_keyboard())
 
     del user_data['dates']
@@ -1121,6 +1144,8 @@ def run_bot():
                                      CallbackQueryHandler(apply_to_agitate_place_button, pass_user_data=True)],
             SET_EVENT_NAME: [EmptyHandler(set_event_name, pass_user_data=True),
                              CallbackQueryHandler(set_event_name_button, pass_user_data=True)],
+            SET_EVENT_MASTER: [EmptyHandler(set_event_master_start, pass_user_data=True),
+                               MessageHandler(Filters.text, set_event_master_text, pass_user_data=True)],
             SET_EVENT_PLACE: [EmptyHandler(set_event_place, pass_user_data=True),
                               standard_callback_query_handler],
             SELECT_EVENT_PLACE: [EmptyHandler(select_event_place, pass_user_data=True),
