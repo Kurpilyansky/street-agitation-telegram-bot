@@ -520,13 +520,10 @@ def manage_events(bot, update, user_data, region_id):
     query_set = models.AgitationEvent.objects.filter(start_date__gte=date.today(), place__region_id=region_id).select_related('place__region')
     events = list(query_set.select_related('place')[offset:offset + EVENT_PAGE_SIZE])
     keyboard = list()
-    if offset > 0:
-        keyboard.append([InlineKeyboardButton('Назад', callback_data=BACK)])
     for event in events:
         keyboard.append([InlineKeyboardButton('%s %s' % (event.show(markdown=False), event.place.show(markdown=False)),
                                               callback_data=str(event.id))])
-    if query_set.count() > offset + EVENT_PAGE_SIZE:
-        keyboard.append([InlineKeyboardButton('Вперед', callback_data=FORWARD)])
+    keyboard.extend(_build_paging_buttons(offset, query_set.count(), EVENT_PAGE_SIZE))
     keyboard.append([InlineKeyboardButton('<< Меню', callback_data=MENU)])
     send_message_text(bot, update, user_data,
                       '*Выберите мероприятие*',
@@ -597,6 +594,18 @@ def cancel_event_button(bot, update, user_data):
         return MANAGE_EVENTS
 
 
+def _build_paging_buttons(offset, count, page_size):
+    paging_buttons = []
+    if offset > 0:
+        paging_buttons.append(InlineKeyboardButton('<<', callback_data=BACK))
+    if count > offset + page_size:
+        paging_buttons.append(InlineKeyboardButton('>>', callback_data=FORWARD))
+    if paging_buttons:
+        return [paging_buttons]
+    else:
+        return []
+
+
 @region_decorator
 def apply_to_agitate(bot, update, user_data, region_id):
     if 'events_offset' not in user_data:
@@ -618,8 +627,6 @@ def apply_to_agitate(bot, update, user_data, region_id):
         event__place__region_id=region_id).all())
     exclude_event_ids = {p.event_id: True for p in participations}
     keyboard = list()
-    if offset > 0:
-        keyboard.append([InlineKeyboardButton('Назад', callback_data=BACK)])
     any_event = False
     for event in events:
         if event.id not in exclude_event_ids:
@@ -636,8 +643,8 @@ def apply_to_agitate(bot, update, user_data, region_id):
         del user_data['events_offset']
         return
 
-    if query_set.count() > offset + EVENT_PAGE_SIZE:
-        keyboard.append([InlineKeyboardButton('Вперед', callback_data=FORWARD)])
+    keyboard.extend(_build_paging_buttons(offset, query_set.count(), EVENT_PAGE_SIZE))
+
     if abilities.can_be_applicant:
         keyboard.append([InlineKeyboardButton('Заявить новый куб', callback_data=CUBE_APPLICATION)])
     keyboard.append([InlineKeyboardButton('<< Меню', callback_data=MENU)])
@@ -795,6 +802,7 @@ def set_event_master_text(bot, update, user_data):
         user_data['master_telegram_id'] = agitator.telegram_id
         return SET_EVENT_PLACE
 
+
 def set_event_place(bot, update, user_data):
     if 'place_id' in user_data:
         del user_data['place_id']
@@ -818,11 +826,10 @@ def select_event_place(bot, update, user_data, region_id):
         offset = 0
     query_set = models.AgitationPlace.objects.filter(region_id=region_id)
     places = query_set.order_by('-last_update_time')[offset:offset + PLACE_PAGE_SIZE]
-    keyboard = [[InlineKeyboardButton("Назад", callback_data=BACK)]]
+    keyboard = []
     for place in places:
         keyboard.append([InlineKeyboardButton(place.address, callback_data=str(place.id))])
-    if query_set.count() > offset + PLACE_PAGE_SIZE:
-        keyboard.append([InlineKeyboardButton("Вперед", callback_data=FORWARD)])
+    keyboard.extend(_build_paging_buttons(offset, query_set.count(), PLACE_PAGE_SIZE))
     send_message_text(bot, update, user_data, "Выберите место", reply_markup=InlineKeyboardMarkup(keyboard))
 
 
@@ -830,11 +837,7 @@ def select_event_place_button(bot, update, user_data):
     query = update.callback_query
     query.answer()
     if query.data == BACK:
-        if user_data['place_offset'] == 0:
-            del user_data['place_offset']
-            return SET_EVENT_PLACE
-        else:
-            user_data['place_offset'] -= PLACE_PAGE_SIZE
+        user_data['place_offset'] -= PLACE_PAGE_SIZE
     elif query.data == FORWARD:
         user_data['place_offset'] += PLACE_PAGE_SIZE
     else:
