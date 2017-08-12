@@ -406,7 +406,7 @@ def show_participations(bot, update, user_data, region_id):
     keyboard = list()
     if participations:
         for p in participations:
-            p_text = p.emoji_status + " " + p.event.show(markdown=False) + " " + p.place.show(markdown=False)
+            p_text = p.emoji_status() + " " + p.event.show(markdown=False) + " " + p.place.show(markdown=False)
             if p.event.place.region_id != region_id:
                 p_text = '*%s* %s' % (p.event.place.region.name, p_text)
             keyboard.append([InlineKeyboardButton(p_text, callback_data=str(p.id))])
@@ -455,7 +455,7 @@ def show_single_participation(bot, update, user_data):
             status = '%s Записались %d%s' % (status, len(participants), EMOJI_HUMAN)
             participant_texts = list()
             for i, p in enumerate(participants):
-                participant_texts.append('%d. %s %s' % (i + 1, p.agitator.full_name, p.emoji_status))
+                participant_texts.append('%d. %s %s' % (i + 1, p.agitator.full_name, p.emoji_status()))
             status = status + '\n' + '\n'.join(participant_texts)
     else:
         status = 'Вы подали заявку на участие'
@@ -471,7 +471,7 @@ def show_single_participation(bot, update, user_data):
         keyboard.append([InlineKeyboardButton('Отказаться от участия', callback_data=CANCEL)])
     keyboard.append([InlineKeyboardButton('Назад', callback_data=BACK)])
     send_message_text(bot, update, user_data,
-                      '%s\n%s %s' % (event_text, participant.emoji_status, status),
+                      '%s\n%s %s' % (event_text, participant.emoji_status(), status),
                       parse_mode="Markdown",
                       reply_markup=InlineKeyboardMarkup(keyboard))
 
@@ -510,7 +510,7 @@ def manage_events(bot, update, user_data, region_id):
             if applications:
                 lines = list()
                 for a in applications:
-                    line = a.emoji_status + " " + a.place.show() + " " + a.agitator.show_full()
+                    line = a.emoji_status() + " " + a.place.show() + " " + a.agitator.show_full()
                     lines.append(line)
                     keyboard.append([InlineKeyboardButton(EMOJI_OK + " " + a.agitator.full_name, callback_data=YES + str(a.id)),
                                      InlineKeyboardButton(EMOJI_NO + " " + a.agitator.full_name, callback_data=NO + str(a.id))])

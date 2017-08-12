@@ -2,6 +2,7 @@
 from street_agitation_bot import models, utils
 from street_agitation_bot.emoji import *
 
+import telegram
 from telegram import (InlineKeyboardButton, InlineKeyboardMarkup)
 
 from telegram.ext import CallbackQueryHandler
@@ -9,6 +10,23 @@ from telegram.ext import CallbackQueryHandler
 
 PARTICIPANT_CONFIRM = 'PARTICIPANT_CONFIRM'
 PARTICIPANT_DECLINE = 'PARTICIPANT_DECLINE'
+
+
+def edit_participant_message(message, participant):
+    keyboard = [[InlineKeyboardButton('Подтвердить',
+                                      callback_data=PARTICIPANT_CONFIRM + str(participant.id))],
+                [InlineKeyboardButton('Отклонить',
+                                      callback_data=PARTICIPANT_DECLINE + str(participant.id))]]
+
+    try:
+        message.edit_text('%s\nРегион %s\n%s %s\nВолонтер %s'
+                          % (participant.emoji_status(True),
+                             participant.place.region.show(), participant.event.show(),
+                             participant.place.show(), participant.agitator.show_full()),
+                          parse_mode='Markdown',
+                          reply_markup=InlineKeyboardMarkup(keyboard))
+    except telegram.error.BadRequest:
+        pass  ## ignore 'Message is not modified'
 
 
 def participant_button(bot, update, groups):
@@ -20,15 +38,6 @@ def participant_button(bot, update, groups):
     if not participant:
         query.answer(text='Данная заявка не найдена. Что-то пошло не так :(', show_alert=True)
         return
-    agitator = participant.agitator
-    event = participant.event
-    place = participant.place
-    region = place.region
-    if participant.canceled:
-        query.message.edit_text('%s Заявка отменена\nРегион %s\n%s %s\nВолонтер %s'
-                                % (participant.emoji_status, region.show(), event.show(), place.show(), agitator.show_full()),
-                                parse_mode='Markdown')
-        return
     #agitator_in_region = models.AgitatorInRegion.get(region.id, update.effective_user.id)
     #if not (agitator_in_region and agitator_in_region.is_admin):
     #    query.answer(text='У вас нет прав на это действие', show_alert=True)
@@ -36,20 +45,11 @@ def participant_button(bot, update, groups):
 
     query.answer()
     if groups[0] == PARTICIPANT_CONFIRM:
-        models.AgitationEventParticipant.approve(id=participant_id)
-        keyboard = [[InlineKeyboardButton(EMOJI_OK + ' Подтвердить',
-                                          callback_data=PARTICIPANT_CONFIRM + participant_id)],
-                    [InlineKeyboardButton('Отклонить',
-                                          callback_data=PARTICIPANT_DECLINE + participant_id)]]
-    # elif groups[1] == PARTICIPANT_DECLINE:
-    else:
-        models.AgitationEventParticipant.decline(id=participant_id)
-        keyboard = [[InlineKeyboardButton('Подтвердить',
-                                          callback_data=PARTICIPANT_CONFIRM + participant_id)],
-                    [InlineKeyboardButton(EMOJI_NO + ' Отклонить',
-                                          callback_data=PARTICIPANT_DECLINE + participant_id)]]
+        participant.make_approve()
+    elif groups[0] == PARTICIPANT_DECLINE:
+        participant.make_decline()
 
-    query.message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(keyboard))
+    edit_participant_message(query.message, participant)
 
 
 def register_handlers(dispatcher):

@@ -213,15 +213,33 @@ class AgitationEventParticipant(models.Model):
     declined = models.BooleanField(default=False)
     canceled = models.BooleanField(default=False)
 
-    @property
-    def emoji_status(self):
+    def emoji_status(self, with_text=False):
         if self.canceled:
-            return EMOJI_NO
-        if self.approved:
-            return EMOJI_OK
-        if self.declined:
-            return EMOJI_NO
-        return EMOJI_QUESTION
+            emoji = EMOJI_NO
+            text = 'Заявка отменена'
+        elif self.approved:
+            emoji = EMOJI_OK
+            text = 'Заявка подтверждена'
+        elif self.declined:
+            emoji = EMOJI_NO
+            text = 'Заявка отклонена'
+        else:
+            emoji = EMOJI_QUESTION
+            text = 'Новая заявка'
+        if with_text:
+            return emoji + ' ' + text
+        else:
+            return emoji
+
+    def make_approve(self):
+        self.approved = True
+        self.declined = False
+        self.save()
+
+    def make_decline(self):
+        self.approved = False
+        self.declined = True
+        self.save()
 
     @classmethod
     def create(cls, agitator_id, event_id, place_id):
