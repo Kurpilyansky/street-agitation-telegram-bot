@@ -69,6 +69,7 @@ def notify_about_new_registration(bot, region_id, agitator_id, text):
                      % (region.show(), agitator.show_full(), text),
                      parse_mode="Markdown")
 
+
 def _notify_about_participant(bot, participant_id, text):
     participant = models.AgitationEventParticipant.objects.filter(
                     id=participant_id
@@ -93,11 +94,12 @@ def _notify_about_participant(bot, participant_id, text):
                          text=full_text,
                          parse_mode='Markdown',
                          reply_markup=InlineKeyboardMarkup(keyboard))
-    bot.send_message(event.master.telegram_id,
-                     text='%s %s в %s %s' % (agitator.full_name, text, event.show(), place.show()),
-                     parse_mode='Markdown',
-                     reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(
-                         'Посмотреть все заявки', callback_data=SHOW_EVENT_FOR_MASTER+str(event.id))]]))
+    if event.master.telegram_id > 0:
+        bot.send_message(event.master.telegram_id,
+                         text='%s %s в %s %s' % (agitator.full_name, text, event.show(), place.show()),
+                         parse_mode='Markdown',
+                         reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(
+                             'Посмотреть все заявки', callback_data=SHOW_EVENT_FOR_MASTER+str(event.id))]]))
 
 
 def notify_about_new_participant(bot, participant_id):
