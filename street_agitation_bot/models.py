@@ -325,3 +325,13 @@ class AgitationEventReportMaterials(models.Model):
     name = models.CharField(max_length=100)
     start_count = models.PositiveIntegerField()
     end_count = models.PositiveIntegerField(null=True, blank=True)
+
+
+class TaskRun(models.Model):
+    task_key = models.CharField(max_length=200)
+    scheduled_moment = models.DateTimeField()
+    run_moment = models.DateTimeField()
+
+    @classmethod
+    def get_last_run(cls, key):
+        return cls.objects.filter(task_key=key).order_by('-scheduled_moment').first()

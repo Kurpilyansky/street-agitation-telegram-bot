@@ -1,4 +1,4 @@
-from street_agitation_bot import bot_settings, models, notifications, utils
+from street_agitation_bot import bot_settings, models, notifications, utils, cron
 from street_agitation_bot.emoji import *
 
 import traceback
@@ -6,7 +6,6 @@ import traceback
 import re
 import collections
 from datetime import datetime, date, timedelta
-import telegram
 from telegram import (ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove,
                       InlineKeyboardButton, InlineKeyboardMarkup,
                       InlineQueryResultArticle, TelegramError)
@@ -32,13 +31,6 @@ def region_decorator(func):
     return wrapper
 
 
-def safe_delete_message(bot, chat_id, message_id):
-    try:
-        bot.delete_message(chat_id, message_id)
-    except telegram.error.BadRequest as e:
-        pass  # ignore 'Message can't be deleted'
-
-
 def send_message_text(bot, update, user_data, *args, **kwargs):
     last_bot_message_ids = user_data.get('last_bot_message_id', None)
     if not last_bot_message_ids:
@@ -52,7 +44,7 @@ def send_message_text(bot, update, user_data, *args, **kwargs):
     kwargs.pop('location', None)
     cur_ts = datetime.now().timestamp()
     for message_id in last_bot_message_ids:
-        safe_delete_message(bot, update.effective_chat.id, message_id)
+        utils.safe_delete_message(bot, update.effective_chat.id, message_id)
     new_message_ids = []
     if location:
         kwargs2 = kwargs.copy()
@@ -1062,7 +1054,7 @@ def show_event_for_master(bot, update, user_data, groups):
     participant = models.AgitationEventParticipant.get(update.effective_user.id, event_id)
     if participant:
         query.answer()
-        safe_delete_message(bot, update.effective_chat.id, update.effective_message.message_id)
+        utils.safe_delete_message(bot, update.effective_chat.id, update.effective_message.message_id)
         user_data['participant_id'] = participant.id
         return SHOW_SINGLE_PARTICIPATION
     query.answer('Что-то пошло не так')
@@ -1106,7 +1098,7 @@ def run_bot():
             SET_LAST_NAME: [EmptyHandler(set_last_name_start, pass_user_data=True),
                             MessageHandler(Filters.text, set_last_name, pass_user_data=True)],
             SET_FIRST_NAME: [EmptyHandler(set_first_name_start, pass_user_data=True),
-                            MessageHandler(Filters.text, set_first_name, pass_user_data=True)],
+                             MessageHandler(Filters.text, set_first_name, pass_user_data=True)],
             SET_PHONE: [EmptyHandler(set_phone_start, pass_user_data=True),
                         MessageHandler(Filters.contact, set_phone_contact, pass_user_data=True),
                         MessageHandler(Filters.text, set_phone_text, pass_user_data=True)],
@@ -1184,6 +1176,8 @@ def run_bot():
 
     # log all errors
     dp.add_error_handler(error_handler)
+
+    cron.init_all(updater)
 
     # Start the Bot
     updater.start_polling()
