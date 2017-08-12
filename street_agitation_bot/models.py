@@ -276,3 +276,43 @@ class AgitationEventParticipant(models.Model):
 
     class Meta:
         unique_together = ('agitator', 'event')
+
+
+class Storage(models.Model):
+    region = models.ForeignKey(Region)
+
+    public_name = models.CharField(max_length=1000)
+    private_name = models.CharField(max_length=1000)
+    holder = models.ForeignKey(Agitator)
+    geo_latitude = models.FloatField(null=True, blank=True)
+    geo_longitude = models.FloatField(null=True, blank=True)
+
+
+class Cube(models.Model):
+    region = models.ForeignKey(Region)
+    last_storage = models.ForeignKey(Storage)
+
+
+class CubeUsageInEvent(models.Model):
+    event = models.ForeignKey(AgitationEvent)
+    cube = models.ForeignKey(Cube)
+    delivered_from = models.ForeignKey(Storage, null=True, blank=True, related_name='usage_delivered_from')
+    delivered_by = models.ForeignKey(Agitator, null=True, blank=True, related_name='usage_delivered_by')
+    shipped_to = models.ForeignKey(Storage, null=True, blank=True, related_name='usage_shipped_to')
+    shipped_by = models.ForeignKey(Agitator, null=True, blank=True, related_name='usage_shipped_by')
+
+    class Meta:
+        unique_together = ('event',)
+
+
+class AgitationEventReport(models.Model):
+    start_date = models.DateTimeField(help_text='Фактическое время начала', null=True, blank=True)
+    end_date = models.DateTimeField(help_text='Фактическое время окончания', null=True, blank=True)
+    comment = models.CharField(max_length=1000, null=True, blank=True)
+
+
+class AgitationEventReportMaterials(models.Model):
+    report = models.ForeignKey(AgitationEventReport)
+    name = models.CharField(max_length=100)
+    start_count = models.PositiveIntegerField()
+    end_count = models.PositiveIntegerField(null=True, blank=True)
