@@ -6,6 +6,7 @@ import traceback
 import re
 import collections
 from datetime import datetime, date, timedelta
+import telegram
 from telegram import (ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove,
                       InlineKeyboardButton, InlineKeyboardMarkup,
                       InlineQueryResultArticle, TelegramError)
@@ -90,7 +91,10 @@ def send_message_text(bot, update, user_data, *args, **kwargs):
         new_message = update.callback_query.edit_message_text(*args, **kwargs)
     else:
         if last_bot_message_id:
-            bot.delete_message(update.effective_chat.id, last_bot_message_id)
+            try:
+                bot.delete_message(update.effective_chat.id, last_bot_message_id)
+            except telegram.error.BadRequest:
+                pass  # ignore 'Message can't be deleted'
         new_message = update.effective_message.reply_text(*args, **kwargs)
     user_data['last_bot_message_id'] = new_message.message_id
     user_data['last_bot_message_ts'] = cur_ts
