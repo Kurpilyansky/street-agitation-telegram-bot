@@ -152,6 +152,8 @@ class AgitationEvent(models.Model):
     start_date = models.DateTimeField(null=False)
     end_date = models.DateTimeField(null=False)
 
+    master = models.ForeignKey(Agitator)
+
     is_canceled = models.BooleanField(default=False)
 
     agitators_limit = models.IntegerField(null=True, blank=True)
