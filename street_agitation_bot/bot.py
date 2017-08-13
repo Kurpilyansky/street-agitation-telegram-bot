@@ -513,7 +513,10 @@ def set_cube_usage_start(bot, update, user_data):
                 storages = list(models.Storage.objects.filter(region_id=event.place.region_id))
                 keyboard = [[InlineKeyboardButton(storage.show(private=True, markdown=False),
                                                   callback_data=str(storage.id))]
-                            for storage in storages] + keyboard
+                            for storage in storages
+                            ] + [[InlineKeyboardButton('Добавить новый склад',
+                                                       callback_data=CREATE_CUBE_STORAGE)]
+                                 ] + keyboard
                 send_message_text(bot, update, user_data,
                                   'Куда увезут куб после %s %s' % (event.show(), event.place.show()),
                                   reply_markup=InlineKeyboardMarkup(keyboard),
@@ -576,6 +579,8 @@ def set_cube_usage_button(bot, update, user_data):
         if query.data == BACK:
             del user_data['field_name']
         elif user_data['field_name'] == 'shipped_to':
+            if query.data in [CREATE_CUBE_STORAGE]:
+                return query.data
             storage_id = int(query.data)
             models.CubeUsageInEvent.objects.filter(
                 event_id=event_id
@@ -681,7 +686,8 @@ def create_cube_storage(bot, update, user_data):
                           'Введите название и полный адрес')
     elif 'public_name' not in params:
         send_message_text(bot, update, user_data,
-                          'Введите название с точностью до района города (без указания тоного адреса)')
+                          'Введите название с точностью до района/микрорайона города '
+                          'или станции метро (без указания точного адреса)')
     elif 'holder_id' not in params:
         send_message_text(bot, update, user_data,
                           'С кем связаться?')
@@ -703,6 +709,14 @@ def _create_cube_storage(bot, update, user_data, region_id):
         new_storage.geo_latitude = params['location']['latitude']
         new_storage.geo_longitude = params['location']['longitude']
     new_storage.save()
+    if user_data.get('field_name', None) == 'shipped_to':
+        event_id = user_data['event_id']
+        models.CubeUsageInEvent.objects.filter(
+            event_id=event_id
+        ).update(shipped_to=new_storage)
+        notifications.notify_about_cube_usage(bot, event_id)
+        del user_data['field_name']
+        return SET_CUBE_USAGE
     models.Cube.objects.create(region_id=region_id, last_storage=new_storage)
     return MANAGE_CUBES
 
