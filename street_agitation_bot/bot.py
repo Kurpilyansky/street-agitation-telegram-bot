@@ -1224,11 +1224,11 @@ def create_event_series_confirm_button(bot, update, user_data):
         return MENU
 
 
-@region_decorator
-def create_event_series(bot, update, user_data, region_id):
+def create_event_series(bot, update, user_data):
     events = _create_events(user_data)
     for e in events:
         e.save()
+        cron.schedule_after_event_created(bot, e)
         models.AgitationEventParticipant.create(e.master.telegram_id, e.id, e.place.id)[0].make_approve()
     text = "\n".join(["Добавлено:",
                       "Ответственный: %s" % events[0].master.show(private=True)] +
@@ -1282,7 +1282,7 @@ def show_event_for_master(bot, update, user_data, groups):
     query.answer('Что-то пошло не так')
 
 
-def deliver_cube_to_event(bot, update, user_data, groups):
+def transfer_cube_to_event(bot, update, user_data, groups):
     query = update.callback_query
     query.answer()
     event_id = int(groups[0])
@@ -1405,8 +1405,8 @@ def run_bot():
                                             pattern='^%s(\d)+$' % SHOW_EVENT_FOR_MASTER,
                                             pass_groups=True,
                                             pass_user_data=True),
-                       CallbackQueryHandler(deliver_cube_to_event,
-                                            pattern='^%s(\d)+$' % DELIVER_CUBE_TO_EVENT,
+                       CallbackQueryHandler(transfer_cube_to_event,
+                                            pattern='^%s(\d)+$' % TRANSFER_CUBE_TO_EVENT,
                                             pass_groups=True,
                                             pass_user_data=True)],
         fallbacks=[CommandHandler('cancel', cancel, pass_user_data=True),

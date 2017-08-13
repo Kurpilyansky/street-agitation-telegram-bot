@@ -101,8 +101,40 @@ class DeliveryCubeToEventTask(AbstractTask):
                                              parse_mode='Markdown',
                                              reply_markup=InlineKeyboardMarkup([[
                                                 InlineKeyboardButton(
-                                                    'Доставить',
-                                                    callback_data=DELIVER_CUBE_TO_EVENT + str(event.id))]]))
+                                                    'Спланировать',
+                                                    callback_data=TRANSFER_CUBE_TO_EVENT + str(event.id))]]))
+        self._prev_message_id = new_message.message_id
+        return self.repeat()
+
+
+class ShipCubeFromEventTask(AbstractTask):
+    def __init__(self, event, **kwargs):
+        super().__init__(event.start_date - timedelta(hours=3, minutes=20),
+                         timedelta(hours=1),
+                         **kwargs)
+        self._event_id = event.id
+        self._prev_message_id = None
+
+    def get_key(self):
+        return 'ShipCubeFromEventTask' + str(self._event_id)
+
+    def process(self):
+        event = models.AgitationEvent.objects.select_related('place__region', 'cubeusageinevent').filter(id=self._event_id).first()
+        if not event or event.is_canceled:
+            return
+        region = event.place.region
+        if self._prev_message_id:
+            utils.safe_delete_message(self._bot, region.registrations_chat_id, self._prev_message_id)
+        cube_usage = event.cubeusageinevent if hasattr(event, 'cubeusageinevent') else None
+        if cube_usage and cube_usage.shipped_to and cube_usage.shipped_by:
+            return
+        new_message = self._bot.send_message(region.registrations_chat_id,
+                                             'Необходимо увезти куб после %s %s' % (event.show(), event.place.show()),
+                                             parse_mode='Markdown',
+                                             reply_markup=InlineKeyboardMarkup([[
+                                                InlineKeyboardButton(
+                                                    'Спланировать',
+                                                    callback_data=TRANSFER_CUBE_TO_EVENT + str(event.id))]]))
         self._prev_message_id = new_message.message_id
         return self.repeat()
 
@@ -127,5 +159,12 @@ def init_all(updater):
                 | Q(cubeusageinevent__delivered_from=None))
     for event in query_set:
         cron_tab.add_task(DeliveryCubeToEventTask(event, bot=bot, cron_tab=cron_tab))
+        cron_tab.add_task(ShipCubeFromEventTask(event, bot=bot, cron_tab=cron_tab))
 
     updater._init_thread(lambda: _cron_cycle(cron_tab), "cron")  # TODO hack
+
+
+def schedule_after_event_created(bot, event):
+    if event.need_cube:
+        cron_tab.add_task(DeliveryCubeToEventTask(event, bot=bot, cron_tab=cron_tab))
+        cron_tab.add_task(ShipCubeFromEventTask(event, bot=bot, cron_tab=cron_tab))
