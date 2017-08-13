@@ -22,8 +22,9 @@ class RegionAdmin(VersionAdmin):
     )
 
 
-class AgitatorAdmin(VersionAdmin):
+class UserAdmin(VersionAdmin):
     list_display = (
+        'id',
         'telegram_id',
         'telegram',
         'last_name',
@@ -35,6 +36,7 @@ class AgitatorAdmin(VersionAdmin):
     )
 
     search_fields = (
+        '=id',
         '=telegram_id',
         'telegram',
         'last_name',
@@ -228,7 +230,7 @@ class CubeUsageInEventAdmin(VersionAdmin):
 
 
 admin.site.register(models.Region, RegionAdmin)
-admin.site.register(models.Agitator, AgitatorAdmin)
+admin.site.register(models.User, UserAdmin)
 admin.site.register(models.AgitatorInRegion, AgitatorInRegionAdmin)
 admin.site.register(models.AgitationPlace, AgitationPlaceAdmin)
 admin.site.register(models.AgitationPlaceHierarchy, AgitationPlaceHierarchyAdmin)

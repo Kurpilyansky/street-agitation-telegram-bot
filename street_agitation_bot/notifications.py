@@ -61,12 +61,11 @@ def register_handlers(dispatcher):
                                                 pass_groups=True))
 
 
-def notify_about_new_registration(bot, region_id, agitator_id, text):
+def notify_about_new_registration(bot, region_id, user, text):
     region = models.Region.get_by_id(region_id)
-    agitator = models.Agitator.find_by_id(agitator_id)
     bot.send_message(region.registrations_chat_id,
                      'Новая анкета\nРегион %s\n%s%s'
-                     % (region.show(), agitator.show(private=True), text),
+                     % (region.show(), user.show(private=True), text),
                      parse_mode="Markdown")
 
 
@@ -94,7 +93,7 @@ def _notify_about_participant(bot, participant_id, text):
                          text=full_text,
                          parse_mode='Markdown',
                          reply_markup=InlineKeyboardMarkup(keyboard))
-    if event.master.telegram_id > 0:
+    if event.master.telegram_id:
         bot.send_message(event.master.telegram_id,
                          text='%s %s в %s %s' % (agitator.show(), text, event.show(), place.show()),
                          parse_mode='Markdown',

@@ -39,14 +39,14 @@ class Region(models.Model):
         return self.name
 
 
-class Agitator(models.Model):
-    telegram_id = models.IntegerField(primary_key=True)
+class User(models.Model):
+    telegram_id = models.IntegerField(null=True, blank=True)
     telegram = models.CharField(max_length=100, blank=True, null=True)
     first_name = models.CharField(max_length=200, blank=False, null=False)
     last_name = models.CharField(max_length=200, blank=False, null=False)
     phone = models.CharField(max_length=50, blank=False, null=False)
 
-    registration_date = models.DateTimeField(auto_now_add=True)
+    registration_date = models.DateTimeField()
 
     def show(self, markdown=True, private=True):
         if private:
@@ -60,14 +60,16 @@ class Agitator(models.Model):
 
     @property
     def regions(self):
-        return list(Region.objects.filter(agitatorinregion__agitator__telegram_id=self.telegram_id).all())
+        return list(Region.objects.filter(agitatorinregion__agitator_id=self.id).all())
 
     @classmethod
-    def find_by_id(cls, id):
+    def find_by_telegram_id(cls, id):
         return cls.objects.filter(telegram_id=id).first()
 
     def show_full(self):
-        if self.telegram:
+        if not self.telegram_id:
+            return utils.escape_markdown('%s %s' % (self.full_name, self.phone))
+        elif self.telegram:
             return utils.escape_markdown('%s @%s %s' % (self.full_name, self.telegram, self.phone))
         else:
             return utils.escape_markdown('@%s (%s) %s' % (self.telegram_id, self.full_name, self.phone))
@@ -77,7 +79,7 @@ class Agitator(models.Model):
 
 
 class AgitatorInRegion(models.Model):
-    agitator = models.ForeignKey(Agitator)
+    agitator = models.ForeignKey(User)
     region = models.ForeignKey(Region)
 
     is_admin = models.BooleanField(default=False)
@@ -89,9 +91,9 @@ class AgitatorInRegion(models.Model):
     can_hold = models.BooleanField(default=False)
 
     @classmethod
-    def save_abilities(cls, region_id, agitator_id, abilities):
+    def save_abilities(cls, region_id, agitator, abilities):
         return cls.objects.update_or_create(region_id=region_id,
-                                            agitator_id=agitator_id,
+                                            agitator_id=agitator.id,
                                             defaults=abilities)
 
     def get_abilities_dict(self):
@@ -102,8 +104,8 @@ class AgitatorInRegion(models.Model):
                 'can_hold': self.can_hold}
 
     @classmethod
-    def get(cls, region_id, agitator_id):
-        return cls.objects.filter(region_id=region_id, agitator_id=agitator_id).first()
+    def get(cls, region_id, telegram_id):
+        return cls.objects.filter(region_id=region_id, agitator__telegram_id=telegram_id).first()
 
     class Meta:
         unique_together = ('agitator', 'region')
@@ -165,7 +167,7 @@ class AgitationEvent(models.Model):
     start_date = models.DateTimeField(null=False)
     end_date = models.DateTimeField(null=False)
 
-    master = models.ForeignKey(Agitator)
+    master = models.ForeignKey(User)
 
     need_cube = models.BooleanField(null=False, blank=False)
 
@@ -202,7 +204,7 @@ class AgitationEvent(models.Model):
 
 class ConversationState(models.Model):
     key = models.CharField(max_length=400, blank=True, null=True, unique=True)
-    agitator = models.ForeignKey(Agitator, blank=True, null=True)
+    agitator = models.ForeignKey(User, blank=True, null=True)
     state = models.CharField(max_length=400, blank=True, null=True)
     data = models.TextField(max_length=64000, blank=True, null=True)
     last_update_time = models.DateTimeField(auto_now=True)
@@ -222,7 +224,7 @@ class ConversationState(models.Model):
 
 
 class AgitationEventParticipant(models.Model):
-    agitator = models.ForeignKey(Agitator)
+    agitator = models.ForeignKey(User)
     event = models.ForeignKey(AgitationEvent)
     place = models.ForeignKey(AgitationPlace, null=True)
 
@@ -259,12 +261,12 @@ class AgitationEventParticipant(models.Model):
         self.save()
 
     @classmethod
-    def create(cls, agitator_id, event_id, place_id):
-        return cls.objects.update_or_create(agitator_id=agitator_id, event_id=event_id, place_id=place_id)
+    def create(cls, user, event_id, place_id):
+        return cls.objects.update_or_create(agitator=user, event_id=event_id, place_id=place_id)
 
     @classmethod
-    def get(cls, agitator_id, event_id):
-        return cls.objects.filter(agitator_id=agitator_id, event_id=event_id).first()
+    def get(cls, telegram_id, event_id):
+        return cls.objects.filter(agitator__telegram_id=telegram_id, event_id=event_id).first()
 
     @classmethod
     def get_count(cls, event_id, place_id):
@@ -300,7 +302,7 @@ class Storage(models.Model):
 
     public_name = models.CharField(max_length=1000)
     private_name = models.CharField(max_length=1000)
-    holder = models.ForeignKey(Agitator)
+    holder = models.ForeignKey(User)
     geo_latitude = models.FloatField(null=True, blank=True)
     geo_longitude = models.FloatField(null=True, blank=True)
 
@@ -338,9 +340,9 @@ class CubeUsageInEvent(models.Model):
     event = models.OneToOneField(AgitationEvent)
     cube = models.ForeignKey(Cube)
     delivered_from = models.ForeignKey(Storage, null=True, blank=True, related_name='usage_delivered_from')
-    delivered_by = models.ForeignKey(Agitator, null=True, blank=True, related_name='usage_delivered_by')
+    delivered_by = models.ForeignKey(User, null=True, blank=True, related_name='usage_delivered_by')
     shipped_to = models.ForeignKey(Storage, null=True, blank=True, related_name='usage_shipped_to')
-    shipped_by = models.ForeignKey(Agitator, null=True, blank=True, related_name='usage_shipped_by')
+    shipped_by = models.ForeignKey(User, null=True, blank=True, related_name='usage_shipped_by')
 
     def show(self, markdown=True, private=False):
         return '%s привезет из %s\n%s отвезет в %s' % (

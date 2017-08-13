@@ -66,7 +66,7 @@ def standard_callback(bot, update):
 
 
 def start(bot, update):
-    if models.Agitator.objects.filter(telegram_id=update.effective_user.id).exists():
+    if models.User.find_by_telegram_id(update.effective_user.id):
         return MENU
     else:
         return SET_LAST_NAME
@@ -74,7 +74,7 @@ def start(bot, update):
 
 def set_last_name_start(bot, update, user_data):
     text = 'Укажите вашу фамилию'
-    if not models.Agitator.objects.filter(telegram_id=update.effective_user.id).exists():
+    if not models.User.find_by_telegram_id(update.effective_user.id):
         text = 'Пожалуйста, оставьте ваши контакты. Сделайте это сейчас, даже если на данный момент ' \
                'вы не готовы помогать. Ваши данные будут использованы только для связи с вами.\n\n' + text
     send_message_text(bot, update, user_data, text)
@@ -111,11 +111,11 @@ def set_phone_text(bot, update, user_data):
 
 def save_profile(bot, update, user_data):
     user = update.effective_user
-    agitator, created = models.Agitator.objects.update_or_create(
+    user, created = models.User.objects.update_or_create(
         telegram_id=user.id,
         defaults={'first_name': user_data.get('first_name'),
                   'last_name': user_data.get('last_name'),
-                  'phone': utils.clean_phone(user_data.get('phone')),
+                  'phone': utils.clean_phone_number(user_data.get('phone')),
                   'telegram': user.username})
 
     text = 'Спасибо за регистрацию!' if created else 'Данные профиля обновлены'
@@ -134,14 +134,14 @@ def save_profile(bot, update, user_data):
 
 @region_decorator
 def show_profile(bot, update, user_data, region_id):
-    agitator_id = update.effective_user.id
-    agitator = models.Agitator.find_by_id(agitator_id)
-    agitator_in_region = models.AgitatorInRegion.get(region_id, agitator_id)
-    if not agitator:
+    user_telegram_id = update.effective_user.id
+    user = models.User.find_by_telegram_id(user_telegram_id)
+    if not user:
         return SET_LAST_NAME
+    agitator_in_region = models.AgitatorInRegion.get(region_id, user_telegram_id)
     if not agitator_in_region:
         return SET_ABILITIES
-    profile = '*Настройки*\nФамилия %s\nИмя %s\nТелефон %s' % (agitator.last_name, agitator.first_name, agitator.phone)
+    profile = '*Настройки*\nФамилия %s\nИмя %s\nТелефон %s' % (user.last_name, user.first_name, user.phone)
     abilities = _prepare_abilities_text(agitator_in_region.get_abilities_dict())
     keyboard = _create_back_to_menu_keyboard()
     keyboard.inline_keyboard[0:0] = [[InlineKeyboardButton('Редактировать профиль', callback_data=SET_LAST_NAME)],
@@ -150,10 +150,10 @@ def show_profile(bot, update, user_data, region_id):
 
 
 def select_region(bot, update, user_data):
-    agitator = models.Agitator.find_by_id(update.effective_user.id)
-    if not agitator:
+    user = models.User.find_by_telegram_id(update.effective_user.id)
+    if not user:
         return SET_LAST_NAME
-    regions = agitator.regions
+    regions = user.regions
     if not regions:
         return ADD_REGION
     buttons = [InlineKeyboardButton(region.show(markdown=False), callback_data=str(region.id)) for region in regions]
@@ -185,11 +185,11 @@ def add_region_start(bot, update, user_data):
 
 
 def add_region(bot, update, user_data):
-    user = update.effective_user
+    user_telegram_id = update.effective_user.id
     region_name = update.message.text
-    region = models.Region.find_by_name(region_name, update.effective_user.id)
+    region = models.Region.find_by_name(region_name, user_telegram_id)
     if region:
-        if models.AgitatorInRegion.get(region.id, user.id):
+        if models.AgitatorInRegion.get(region.id, user_telegram_id):
             send_message_text(bot, update, user_data, 'Данный регион уже добавлен')
             return MENU
         user_data['region_id'] = region.id
@@ -235,9 +235,10 @@ def set_abilities_button(bot, update, user_data):
 
 @region_decorator
 def save_abilities(bot, update, user_data, region_id):
-    agitator_id = update.effective_user.id
+    user_telegram_id = update.effective_user.id
+    user = models.User.find_by_telegram_id(user_telegram_id)
     text = _prepare_abilities_text(user_data['abilities'])
-    obj, created = models.AgitatorInRegion.save_abilities(region_id, agitator_id, user_data['abilities'])
+    obj, created = models.AgitatorInRegion.save_abilities(region_id, user, user_data['abilities'])
     keyboard = _create_back_to_menu_keyboard()
     keyboard.inline_keyboard[0:0] = [[InlineKeyboardButton('Настройки', callback_data=SHOW_PROFILE)]]
     send_message_text(bot, update, user_data,
@@ -245,7 +246,7 @@ def save_abilities(bot, update, user_data, region_id):
                       parse_mode="Markdown",
                       reply_markup=keyboard)
     if created:
-        notifications.notify_about_new_registration(bot, region_id, agitator_id, text)
+        notifications.notify_about_new_registration(bot, region_id, user, text)
     del user_data['abilities']
 
 
@@ -262,12 +263,12 @@ def show_menu(bot, update, user_data):
         keyboard.append([InlineKeyboardButton('Расписание', callback_data=SCHEDULE)])
         keyboard.append([InlineKeyboardButton('Записаться', callback_data=APPLY_TO_AGITATE)])
         region_id = user_data['region_id']
-        agitator_id = update.effective_user.id
-        abilities = models.AgitatorInRegion.get(region_id, agitator_id)
+        user_telegram_id = update.effective_user.id
+        abilities = models.AgitatorInRegion.get(region_id, user_telegram_id)
         if abilities.can_be_applicant:
             keyboard.append([InlineKeyboardButton('Заявить новый куб', callback_data=CUBE_APPLICATION)])
         if models.AgitationEventParticipant.objects.filter(
-                                        agitator_id=agitator_id,
+                                        agitator__telegram_id=user_telegram_id,
                                         event__start_date__gte=date.today()).exists():
             keyboard.append([InlineKeyboardButton('Мои заявки', callback_data=SHOW_PARTICIPATIONS)])
         keyboard.append([InlineKeyboardButton('Настройки', callback_data=SHOW_PROFILE)])
@@ -316,15 +317,15 @@ def make_broadcast_confirm_button(bot, update, user_data, region_id):
     query.answer()
     if query.data == YES:
         errors = list()
-        for a in models.Agitator.objects.filter(agitatorinregion__region_id=region_id).all():
+        for u in models.User.objects.filter(agitatorinregion__region_id=region_id).all():
             try:
                 cur_text = broadcast_text
-                if models.AgitatorInRegion.objects.filter(agitator_id=a.telegram_id).count() > 1:
+                if models.AgitatorInRegion.objects.filter(agitator_id=u.id).count() > 1:
                     cur_text = broadcast_text2
                 reply_markup = None
                 if bot_settings.is_admin_user_id(update.effective_user.id):
                     reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton('Записаться', callback_data=FORCE_BUTTON + '_' + APPLY_TO_AGITATE)]])
-                bot.send_message(a.telegram_id, cur_text, parse_mode='Markdown', reply_markup=reply_markup)
+                bot.send_message(u.telegram_id, cur_text, parse_mode='Markdown', reply_markup=reply_markup)
             except TelegramError as e:
                 logger.error(e, exc_info=1)
                 errors.append(e)
@@ -362,9 +363,9 @@ def cube_application(bot, update, user_data):
 
 @region_decorator
 def show_participations(bot, update, user_data, region_id):
-    agitator_id = update.effective_user.id
+    user_telegram_id = update.effective_user.id
     participations = models.AgitationEventParticipant.objects.filter(
-        agitator_id=agitator_id,
+        agitator__telegram_id=user_telegram_id,
         event__start_date__gte=date.today(),
     ).select_related('event', 'event__place', 'event__place__region').order_by('event__start_date').all()
     keyboard = list()
@@ -397,14 +398,15 @@ def show_participations_button(bot, update, user_data):
 
 
 def show_single_participation(bot, update, user_data):
-    agitator_id = update.effective_user.id
+    user_telegram_id = update.effective_user.id
     if 'participant_id' not in user_data:
         return SHOW_PARTICIPATIONS
     participant = models.AgitationEventParticipant.objects.filter(
         id=user_data['participant_id']).select_related('event', 'place', 'event__place__region', 'event__cubeusageinevent').first()
-    if not participant or participant.agitator_id != agitator_id:
+    if not participant or participant.agitator.telegram_id != user_telegram_id:
         del user_data['participant_id']
         return SHOW_PARTICIPATIONS
+    user = models.User.find_by_telegram_id(user_telegram_id)
     event_text = participant.event.show() + " " + participant.place.show()
     if participant.canceled:
         status = '%s Вы отменили свою заявку' % participant.emoji_status()
@@ -422,11 +424,11 @@ def show_single_participation(bot, update, user_data):
                 if p.agitator_id == p.event.master_id:
                     text = EMOJI_CROWN + ' ' + p.agitator.show(private=True)
                 else:
-                    text = p.agitator.show(private=(agitator_id == p.event.master_id))
+                    text = p.agitator.show(private=(user.id == p.event.master_id))
                 participant_texts.append('%d. %s %s' % (i + 1, p.emoji_status(), text))
             if participant.event.need_cube:
                 if hasattr(participant.event, 'cubeusageinevent'):
-                    cube_usage_text = participant.event.cubeusageinevent.show(private=(agitator_id == participant.event.master_id))
+                    cube_usage_text = participant.event.cubeusageinevent.show(private=(user.id == participant.event.master_id))
                 else:
                     cube_usage_text = '_нет информации о доставке_'
                 status = cube_usage_text + '\n' + status
@@ -474,12 +476,12 @@ EVENT_PAGE_SIZE = 10
 
 
 def set_cube_usage_start(bot, update, user_data):
-    agitator_id = update.effective_user.id
+    user_telegram_id = update.effective_user.id
     event_id = user_data['event_id']
     event = models.AgitationEvent.objects.filter(id=event_id).select_related('place', 'cubeusageinevent').first()
     if not event or not event.need_cube:
         return
-    abilities = models.AgitatorInRegion.get(event.place.region_id, agitator_id)
+    abilities = models.AgitatorInRegion.get(event.place.region_id, user_telegram_id)
     if not abilities or not abilities.is_admin:
         return
     keyboard = [[InlineKeyboardButton('<< Назад', callback_data=MANAGE_EVENTS)]]
@@ -548,16 +550,18 @@ def set_cube_usage_start(bot, update, user_data):
 
 def set_cube_usage_message(bot, update, user_data):
     if 'field_name' in user_data:
-        telegram_id = _extract_mentioned_user_id(update.message)
+        user = _extract_mentioned_user(update.message)
+        if not user:
+            return
         if user_data['field_name'] == 'delivered_by':
             models.CubeUsageInEvent.objects.filter(
                 event_id=user_data['event_id']
-            ).update(delivered_by=telegram_id)
+            ).update(delivered_by=user)
             del user_data['field_name']
         elif user_data['field_name'] == 'shipped_by':
             models.CubeUsageInEvent.objects.filter(
                 event_id=user_data['event_id']
-            ).update(shipped_by=telegram_id)
+            ).update(shipped_by=user)
             del user_data['field_name']
 
 
@@ -571,7 +575,7 @@ def set_cube_usage_button(bot, update, user_data):
             storage_id = int(query.data)
             models.CubeUsageInEvent.objects.filter(
                 event_id=user_data['event_id']
-            ).update(shipped_to=storage_id)
+            ).update(shipped_to_id=storage_id)
             del user_data['field_name']
         elif user_data['field_name'] == 'delivered_from':
             cube_id = int(query.data)
@@ -597,8 +601,8 @@ def set_cube_usage_button(bot, update, user_data):
 
 @region_decorator
 def manage_cubes(bot, update, user_data, region_id):
-    agitator_id = update.effective_user.id
-    abilities = models.AgitatorInRegion.get(region_id, agitator_id)
+    user_telegram_id = update.effective_user.id
+    abilities = models.AgitatorInRegion.get(region_id, user_telegram_id)
     if not abilities or not abilities.is_admin:
         return MENU
     if 'cube_id' in user_data:
@@ -639,8 +643,8 @@ def manage_cubes_button(bot, update, user_data):
 
 @region_decorator
 def create_new_cube(bot, update, user_data, region_id):
-    agitator_id = update.effective_user.id
-    abilities = models.AgitatorInRegion.get(region_id, agitator_id)
+    user_telegram_id = update.effective_user.id
+    abilities = models.AgitatorInRegion.get(region_id, user_telegram_id)
     if not abilities or not abilities.is_admin:
         return MENU
     keyboard = [[InlineKeyboardButton('Выбрать место из старых', callback_data=SELECT_CUBE_STORAGE)],
@@ -689,7 +693,7 @@ def _create_cube_storage(bot, update, user_data, region_id):
     new_storage = models.Storage(region_id=region_id,
                                  public_name=params['public_name'],
                                  private_name=params['private_name'],
-                                 holder_id=params['holder']['telegram_id'])  # TODO from phone
+                                 holder_id=params['holder']['id'])  # TODO from phone
     if 'location' in params:
         new_storage.geo_latitude = params['location']['latitude']
         new_storage.geo_longitude = params['location']['longitude']
@@ -711,9 +715,9 @@ def create_cube_storage_message(bot, update, user_data):
         if Filters.contact(message):
             params['holder'] = {'phone': message.contact.phone_number}
         elif Filters.text(message):
-            user_telegram_id = _extract_mentioned_user_id(message)
-            if user_telegram_id:
-                params['holder'] = {'telegram_id': user_telegram_id}
+            user = _extract_mentioned_user(message)
+            if user:
+                params['holder'] = {'id': user.id}
             else:
                 params['holder'] = {'phone': message.text}  # TODO validate phone
     elif 'location' not in params:
@@ -749,8 +753,8 @@ def select_cube_storage_button(bot, update, user_data, region_id):
 
 @region_decorator
 def manage_events(bot, update, user_data, region_id):
-    agitator_id = update.effective_user.id
-    abilities = models.AgitatorInRegion.get(region_id, agitator_id)
+    user_telegram_id = update.effective_user.id
+    abilities = models.AgitatorInRegion.get(region_id, user_telegram_id)
     if not abilities or not abilities.is_admin:
         return MENU
 
@@ -842,8 +846,8 @@ def manage_events_button(bot, update, user_data):
 
 @region_decorator
 def cancel_event(bot, update, user_data, region_id):
-    agitator_id = update.effective_user.id
-    abilities = models.AgitatorInRegion.get(region_id, agitator_id)
+    user_telegram_id = update.effective_user.id
+    abilities = models.AgitatorInRegion.get(region_id, user_telegram_id)
     if not abilities or not abilities.is_admin:
         return MENU
     if 'event_id' not in user_data:
@@ -892,9 +896,8 @@ def apply_to_agitate(bot, update, user_data, region_id):
     if 'events_offset' not in user_data:
         user_data['events_offset'] = 0
 
-    region = models.Region.get_by_id(region_id)
-    agitator_id = update.effective_user.id
-    abilities = models.AgitatorInRegion.get(region_id, agitator_id)
+    user_telegram_id = update.effective_user.id
+    abilities = models.AgitatorInRegion.get(region_id, user_telegram_id)
     offset = user_data['events_offset']
     if offset < 0:
         offset = 0
@@ -903,7 +906,7 @@ def apply_to_agitate(bot, update, user_data, region_id):
                                                      is_canceled=False)
     events = list(query_set.select_related('place')[offset:offset + EVENT_PAGE_SIZE])
     participations = list(models.AgitationEventParticipant.objects.filter(
-        agitator_id=agitator_id,
+        agitator__telegram_id=user_telegram_id,
         event__end_date__gte=datetime.utcnow(),
         event__place__region_id=region_id).all())
     exclude_event_ids = {p.event_id: True for p in participations}
@@ -1018,8 +1021,9 @@ def apply_to_agitate_place_button(bot, update, user_data):
     elif query.data == YES:
         event_id = user_data['event_id']
         place_id = user_data['place_ids'][-1]
-        agitator_id = update.effective_user.id
-        participant, created = models.AgitationEventParticipant.create(agitator_id, event_id, place_id)
+        user_telegram_id = update.effective_user.id
+        user = models.User.find_by_telegram_id(user_telegram_id)
+        participant, created = models.AgitationEventParticipant.create(user, event_id, place_id)
         if created:
             notifications.notify_about_new_participant(bot, participant.id)
         del user_data['event_id']
@@ -1067,26 +1071,21 @@ def set_event_master_start(bot, update, user_data):
     send_message_text(bot, update, user_data, 'Укажите волонтера, ответственного за этот ивент')
 
 
-def _extract_mentioned_user_id(message):
+def _extract_mentioned_user(message):
     if len(message.entities) != 1:
         return
     entity = message.entities[0]
     if entity.type == 'mention':
         agitator_username = str(message.text[entity.offset:][:entity.length][1:])
-        agitator = models.Agitator.objects.filter(telegram=agitator_username).first()
+        return models.User.objects.filter(telegram=agitator_username).first()
     elif entity.type == 'text_mention':
-        agitator = models.Agitator.find_by_id(entity.user.id)
-    else:
-        agitator = None
-    if agitator:
-        return agitator.telegram_id
-    return
+        return models.User.find_by_id(entity.user.id)
 
 
 def set_event_master_text(bot, update, user_data):
-    user_telegram_id = _extract_mentioned_user_id(update.effective_message)
-    if user_telegram_id is not None:
-        user_data['master_telegram_id'] = user_telegram_id
+    user = _extract_mentioned_user(update.effective_message)
+    if user:
+        user_data['master_id'] = user.id
         return SET_EVENT_PLACE
 
 
@@ -1226,7 +1225,6 @@ def set_event_time(bot, update, user_data):
 
 def _create_events(user_data):
     place = models.AgitationPlace.objects.select_related('region').get(id=user_data['place_id'])
-    master = models.Agitator.find_by_id(user_data['master_telegram_id'])
     time_range = user_data['time_range']
     from_seconds = (time_range[0] * 60 + time_range[1]) * 60 - place.region.timezone_delta
     to_seconds = (time_range[2] * 60 + time_range[3]) * 60 - place.region.timezone_delta
@@ -1240,7 +1238,7 @@ def _create_events(user_data):
         event_datetime = datetime.combine(event_date, datetime.min.time())
         event_name = user_data['event_name']
         event = models.AgitationEvent(
-            master=master,
+            master_id=user_data['master_id'],
             place=place,
             name=event_name,
             need_cube=(event_name == 'Куб'),  # TODO small hack
@@ -1302,7 +1300,7 @@ def create_event_series(bot, update, user_data):
     for e in events:
         e.save()
         cron.schedule_after_event_created(bot, e)
-        models.AgitationEventParticipant.create(e.master.telegram_id, e.id, e.place.id)[0].make_approve()
+        models.AgitationEventParticipant.create(e.master, e.id, e.place.id)[0].make_approve()
     text = "\n".join(["Добавлено:",
                       "Ответственный: %s" % events[0].master.show(private=True)] +
                      ['%s %s' % (e.show(), e.place.show()) for e in events])
@@ -1314,6 +1312,7 @@ def create_event_series(bot, update, user_data):
     del user_data['dates']
     del user_data['time_range']
     del user_data['place_id']
+    del user_data['master_id']
     del user_data['event_name']
 
 

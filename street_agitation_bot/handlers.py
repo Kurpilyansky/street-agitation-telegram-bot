@@ -318,10 +318,11 @@ class ConversationHandler(Handler):
             else:
                 self._state_in_database[key] = models.ConversationState(key=key)
 
-    def _save_state(self, key, dispatcher, agitator_id):
+    def _save_state(self, key, dispatcher, user_telegram_id):
         state_in_database = self._state_in_database.get(key, models.ConversationState(key=key))
-        if models.Agitator.find_by_id(agitator_id):
-            state_in_database.agitator_id = agitator_id
+        user = models.User.find_by_telegram_id(user_telegram_id)
+        if user:
+            state_in_database.agitator = user
         state_in_database.state = self.conversations.get(key)
         state_in_database.data = json.dumps(dispatcher.user_data.get(key))
         state_in_database.save()
