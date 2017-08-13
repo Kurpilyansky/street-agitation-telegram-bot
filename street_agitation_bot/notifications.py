@@ -110,3 +110,14 @@ def notify_about_cancellation_participation(bot, participant_id):
 
 def notify_about_restoration_participation(bot, participant_id):
     _notify_about_participant(bot, participant_id, 'восстановил заявку на участие')
+
+
+def notify_about_cube_usage(bot, event_id):
+    event = models.AgitationEvent.objects.filter(id=event_id).select_related('cubeusageinevent', 'master').first()
+    if not event or not hasattr(event, 'cubeusageinevent'):
+        return
+    cube_usage = event.cubeusageinevent
+    bot.send_message(event.master.telegram_id,
+                     'Новая информация о %s %s\n%s' % (event.show(), event.place.show(),
+                                                       cube_usage.show(private=True)),
+                     parse_mode='Markdown')

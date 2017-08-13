@@ -360,9 +360,8 @@ class Storage(models.Model):
     def show(self, markdown=True, private=False):
         name = self.private_name if private else self.public_name
         if markdown:
-            return '*%s*' % utils.escape_markdown(name)
-        else:
-            return name
+            name = '*%s*' % utils.escape_markdown(name)
+        return '%s (контакт: %s)' % (name, self.holder.show(markdown, private))
 
     def __str__(self):
         return self.show(markdown=False, private=True)

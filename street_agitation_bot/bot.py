@@ -553,36 +553,42 @@ def set_cube_usage_message(bot, update, user_data):
         user = _extract_mentioned_user(update.message)
         if not user:
             return
+        event_id = user_data['event_id']
         if user_data['field_name'] == 'delivered_by':
             models.CubeUsageInEvent.objects.filter(
-                event_id=user_data['event_id']
+                event_id=event_id
             ).update(delivered_by=user)
+            notifications.notify_about_cube_usage(bot, event_id)
             del user_data['field_name']
         elif user_data['field_name'] == 'shipped_by':
             models.CubeUsageInEvent.objects.filter(
-                event_id=user_data['event_id']
+                event_id=event_id
             ).update(shipped_by=user)
+            notifications.notify_about_cube_usage(bot, event_id)
             del user_data['field_name']
 
 
 def set_cube_usage_button(bot, update, user_data):
     query = update.callback_query
     query.answer()
+    event_id = user_data['event_id']
     if 'field_name' in user_data:
         if query.data == BACK:
             del user_data['field_name']
         elif user_data['field_name'] == 'shipped_to':
             storage_id = int(query.data)
             models.CubeUsageInEvent.objects.filter(
-                event_id=user_data['event_id']
+                event_id=event_id
             ).update(shipped_to_id=storage_id)
+            notifications.notify_about_cube_usage(bot, event_id)
             del user_data['field_name']
         elif user_data['field_name'] == 'delivered_from':
             cube_id = int(query.data)
             cube = models.Cube.objects.filter(id=cube_id).first()
             models.CubeUsageInEvent.objects.filter(
-                event_id=user_data['event_id']
+                event_id=event_id
             ).update(cube_id=cube_id, delivered_from_id=cube.last_storage_id)
+            notifications.notify_about_cube_usage(bot, event_id)
             del user_data['field_name']
     if query.data in [MANAGE_CUBES, MANAGE_EVENTS]:
         return query.data
@@ -594,9 +600,10 @@ def set_cube_usage_button(bot, update, user_data):
         if bool(match):
             cube_id = int(match.group(1))
             cube = models.Cube.objects.filter(id=cube_id).first()
-            models.CubeUsageInEvent.objects.create(event_id=user_data['event_id'],
+            models.CubeUsageInEvent.objects.create(event_id=event_id,
                                                    cube_id=cube_id,
                                                    delivered_from_id=cube.last_storage_id)
+            notifications.notify_about_cube_usage(bot, event_id)
 
 
 @region_decorator
@@ -1377,7 +1384,6 @@ def show_event_for_master(bot, update, user_data, groups):
 
 def transfer_cube_to_event(bot, update, user_data, groups):
     query = update.callback_query
-    print(query.data, groups)
     query.answer()
     event_id = int(groups[0])
     user_data['event_id'] = event_id
