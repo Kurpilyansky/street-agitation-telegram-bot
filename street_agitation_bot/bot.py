@@ -694,7 +694,7 @@ def _create_cube_storage(bot, update, user_data, region_id):
     new_storage = models.Storage(region_id=region_id,
                                  public_name=params['public_name'],
                                  private_name=params['private_name'],
-                                 holder_id=params['holder']['id'])  # TODO from phone
+                                 holder_id=params['holder_id'])
     if 'location' in params:
         new_storage.geo_latitude = params['location']['latitude']
         new_storage.geo_longitude = params['location']['longitude']
@@ -713,14 +713,8 @@ def create_cube_storage_message(bot, update, user_data):
         if Filters.text(message):
             params['public_name'] = message.text
     elif 'holder' not in params:
-        if Filters.contact(message):
-            params['holder'] = {'phone': message.contact.phone_number}
-        elif Filters.text(message):
-            user = _extract_mentioned_user(message)
-            if user:
-                params['holder'] = {'id': user.id}
-            else:
-                params['holder'] = {'phone': message.text}  # TODO validate phone
+        user = _extract_mentioned_user(message)
+        params['holder_id'] = user.id
     elif 'location' not in params:
         if Filters.location(message):
             params['location'] = {
