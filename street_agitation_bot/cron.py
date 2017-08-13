@@ -1,4 +1,5 @@
 from django.db.models import Q
+from django.db import transaction
 
 from time import sleep
 from datetime import datetime, timedelta
@@ -47,13 +48,15 @@ class CronTab:
             if last_run and moment <= last_run.run_moment:
                 task.repeat()
             else:
-                if task.process():
+                if task.process() and task.save_runs_in_database:
                     models.TaskRun.objects.create(task_key=task.get_key(),
                                                   scheduled_moment=moment,
                                                   run_moment=datetime.utcnow())
 
 
 class AbstractTask:
+    save_runs_in_database = True
+
     def __init__(self, first_moment, repeat_timespan, bot, cron_tab):
         self.moment = first_moment
         self._repeat_timespan = repeat_timespan
@@ -64,7 +67,7 @@ class AbstractTask:
         return self.moment < other.moment
 
     def get_key(self):
-        pass
+        raise NotImplementedError()
 
     def process(self):
         pass
@@ -139,6 +142,39 @@ class ShipCubeFromEventTask(AbstractTask):
         return self.repeat()
 
 
+class MakeTransferCubeTask(AbstractTask):
+    save_runs_in_database = False
+
+    def __init__(self, event, **kwargs):
+        super().__init__(event.end_date,
+                         timedelta(minutes=1),
+                         **kwargs)
+        self._event_id = event.id
+
+    def get_key(self):
+        return 'MakeTransferCubeTask' + str(self._event_id)
+
+    def process(self):
+        event = models.AgitationEvent.objects.filter(
+            id=self._event_id).select_related('cubeusageinevent', 'cubeusageinevent__cube').first()
+        if not event or event.is_canceled:
+            return
+        cube_usage = event.cubeusageinevent if hasattr(event, 'cubeusageinevent') else None
+        if cube_usage and cube_usage.transferred_to_storage:
+            return
+        if not cube_usage or not cube_usage.shipped_by or not cube_usage.shipped_to:
+            self.repeat()
+        else:
+            cube_usage = event.cubeusageinevent
+            cube = cube_usage.cube
+            with transaction.atomic():
+                cube.last_storage = cube_usage.shipped_to
+                cube_usage.transferred_to_storage = True
+                cube_usage.save()
+                cube.save()
+        return True
+
+
 def _cron_cycle(cron_tab):
     while True:
         cron_tab.process_tasks()
@@ -156,10 +192,14 @@ def init_all(updater):
         .filter(need_cube=True, is_canceled=False) \
         .filter(Q(cubeusageinevent=None)
                 | Q(cubeusageinevent__delivered_by=None)
-                | Q(cubeusageinevent__delivered_from=None))
+                | Q(cubeusageinevent__delivered_from=None)
+                | Q(cubeusageinevent__shipped_to=None)
+                | Q(cubeusageinevent__shipped_by=None)
+                | Q(cubeusageinevent__transferred_to_storage=False))
     for event in query_set:
         cron_tab.add_task(DeliveryCubeToEventTask(event, bot=bot, cron_tab=cron_tab))
         cron_tab.add_task(ShipCubeFromEventTask(event, bot=bot, cron_tab=cron_tab))
+        cron_tab.add_task(MakeTransferCubeTask(event, bot=bot, cron_tab=cron_tab))
 
     updater._init_thread(lambda: _cron_cycle(cron_tab), "cron")  # TODO hack
 

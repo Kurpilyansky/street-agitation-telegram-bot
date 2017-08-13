@@ -56,7 +56,6 @@ class User(models.Model):
             return None
         query_set = cls.objects.filter(**{field_name: field_value})
         users = list(query_set[0:2])
-        print(list(map(str, users)))
         if len(users) == 1:
             return users[0]
         return None
@@ -383,6 +382,7 @@ class CubeUsageInEvent(models.Model):
     delivered_by = models.ForeignKey(User, null=True, blank=True, related_name='usage_delivered_by')
     shipped_to = models.ForeignKey(Storage, null=True, blank=True, related_name='usage_shipped_to')
     shipped_by = models.ForeignKey(User, null=True, blank=True, related_name='usage_shipped_by')
+    transferred_to_storage = models.BooleanField(null=False, blank=False, default=False)
 
     def show(self, markdown=True, private=False):
         return '%s привезет из %s\n%s отвезет в %s' % (

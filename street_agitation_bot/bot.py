@@ -621,8 +621,8 @@ def manage_cubes(bot, update, user_data, region_id):
     keyboard = [[InlineKeyboardButton(cube.show(markdown=False, private=True),
                                       callback_data=str(cube.id))]
                 for cube in cubes]
-    keyboard.append([InlineKeyboardButton('Создать новый куб', callback_data=CREATE_NEW_CUBE)])
     keyboard.append([InlineKeyboardButton('<< Меню', callback_data=MENU)])
+    keyboard.append([InlineKeyboardButton('Создать новый куб', callback_data=CREATE_NEW_CUBE)])
     send_message_text(bot, update, user_data,
                       'Управление кубами',
                       reply_markup=InlineKeyboardMarkup(keyboard))
