@@ -477,7 +477,7 @@ def set_cube_usage_start(bot, update, user_data):
     agitator_id = update.effective_user.id
     event_id = user_data['event_id']
     event = models.AgitationEvent.objects.filter(id=event_id).select_related('place', 'cubeusageinevent').first()
-    if not event:
+    if not event or not event.need_cube:
         return
     abilities = models.AgitatorInRegion.get(event.place.region_id, agitator_id)
     if not abilities or not abilities.is_admin:
@@ -771,7 +771,8 @@ def manage_events(bot, update, user_data, region_id):
             else:
                 text = "Никто не записался на это мероприятие :("
             if not event.is_canceled:
-                keyboard.append([InlineKeyboardButton('Доставка куба', callback_data=SET_CUBE_USAGE)])
+                if event.need_cube:
+                    keyboard.append([InlineKeyboardButton('Доставка куба', callback_data=SET_CUBE_USAGE)])
                 keyboard.append([InlineKeyboardButton('Отменить мероприятие', callback_data=CANCEL_EVENT)])
             keyboard.append([InlineKeyboardButton('<< Назад', callback_data=BACK)])
 
