@@ -150,25 +150,41 @@ def show_profile(bot, update, user_data, region_id):
     send_message_text(bot, update, user_data, '\n'.join((profile, abilities)), parse_mode='Markdown', reply_markup=keyboard)
 
 
+def _in_range(range, region):
+    return range[0] <= region.name[0] <= range[1]
+
+
 def _build_add_region_keyboard(update, user_data):
     show_all = user_data.get('show_all_regions', False)
     user_telegram_id = update.effective_user.id
     regions = list(models.Region.objects.filter(is_public=True))
     my_regions = list(models.Region.objects.filter(agitatorinregion__agitator__telegram_id=user_telegram_id))
-    if not my_regions:
+    if 'region_range' in user_data:
+        range = user_data['region_range']
+        regions = list(filter(lambda r: _in_range(range, r), regions))
+        my_regions = list(filter(lambda r: _in_range(range, r), my_regions))
+    if not show_all and not my_regions:
         show_all = True
     if show_all:
         added_regions = {region.id for region in my_regions}
     else:
         regions = my_regions
         added_regions = set()
-    keyboard = []
-    for region in regions:
-        text = region.show(markdown=False)
-        if region.id in added_regions:
-            text = EMOJI_OK + ' ' + text
-        keyboard.append(InlineKeyboardButton(text, callback_data=str(region.id)))
-    keyboard = utils.chunks(keyboard, 2)
+    if len(regions) > 20:
+        ranges = (('A', 'Б'), ('В', 'Ж'), ('И', 'К'), ('М', 'Р'), ('С', 'Т'), ('У', 'Я'))
+        keyboard = [InlineKeyboardButton('-'.join(range), callback_data='-'.join(range))
+                    for range in ranges]
+        keyboard = utils.chunks(keyboard, 2)
+    else:
+        keyboard = []
+        for region in regions:
+            text = region.show(markdown=False)
+            if region.id in added_regions:
+                text = EMOJI_OK + ' ' + text
+            keyboard.append(InlineKeyboardButton(text, callback_data=str(region.id)))
+        keyboard = utils.chunks(keyboard, 2)
+    if 'region_range' in user_data:
+        keyboard.append([InlineKeyboardButton("<< Назад", callback_data=BACK)])
     if show_all:
         keyboard.append([InlineKeyboardButton('Оставить только мои штабы', callback_data=NO)])
     else:
@@ -193,9 +209,14 @@ def select_region_button(bot, update, user_data):
         user_data['show_all_regions'] = True
     elif query.data == NO:
         user_data['show_all_regions'] = False
+    elif query.data == BACK:
+        del user_data['region_range']
     else:
-        user_data['region_id'] = int(query.data)
-        return MENU
+        if query.data[0].isdigit():
+            user_data['region_id'] = int(query.data)
+            return MENU
+        else:
+            user_data['region_range'] = tuple(query.data.split('-'))
 
 
 ABILITIES_TEXTS = {
