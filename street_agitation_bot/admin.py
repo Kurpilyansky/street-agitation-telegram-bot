@@ -44,6 +44,25 @@ class UserAdmin(VersionAdmin):
     )
 
 
+class AdminRightsAdmin(VersionAdmin):
+    list_display = (
+        'region',
+        'user',
+    )
+
+    list_filter = (
+        'region',
+    )
+
+    search_fields = (
+        '=id',
+        '=user__telegram_id',
+        'user__last_name',
+        'user__first_name',
+        'user__telegram',
+    )
+
+
 class AgitatorInRegionAdmin(VersionAdmin):
     list_display = (
         'region',
@@ -52,7 +71,6 @@ class AgitatorInRegionAdmin(VersionAdmin):
         'can_be_applicant',
         'can_deliver',
         'can_hold',
-        'is_admin',
     )
 
     list_filter = (
@@ -61,7 +79,6 @@ class AgitatorInRegionAdmin(VersionAdmin):
         'can_be_applicant',
         'can_deliver',
         'can_hold',
-        'is_admin',
     )
 
     search_fields = (
@@ -231,6 +248,7 @@ class CubeUsageInEventAdmin(VersionAdmin):
 
 admin.site.register(models.Region, RegionAdmin)
 admin.site.register(models.User, UserAdmin)
+admin.site.register(models.AdminRights, AdminRightsAdmin)
 admin.site.register(models.AgitatorInRegion, AgitatorInRegionAdmin)
 admin.site.register(models.AgitationPlace, AgitationPlaceAdmin)
 admin.site.register(models.AgitationPlaceHierarchy, AgitationPlaceHierarchyAdmin)

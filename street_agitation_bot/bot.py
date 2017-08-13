@@ -273,7 +273,7 @@ def show_menu(bot, update, user_data):
                                         event__start_date__gte=date.today()).exists():
             keyboard.append([InlineKeyboardButton('Мои заявки', callback_data=SHOW_PARTICIPATIONS)])
         keyboard.append([InlineKeyboardButton('Настройки', callback_data=SHOW_PROFILE)])
-        if abilities.is_admin:
+        if models.AdminRights.has_admin_rights(user_telegram_id, region_id):
             keyboard.append([InlineKeyboardButton('Добавить ивент', callback_data=SET_EVENT_NAME)])
             keyboard.append([InlineKeyboardButton('Управление ивентами', callback_data=MANAGE_EVENTS)])
             keyboard.append([InlineKeyboardButton('Логистика', callback_data=MANAGE_CUBES)])
@@ -482,8 +482,7 @@ def set_cube_usage_start(bot, update, user_data):
     event = models.AgitationEvent.objects.filter(id=event_id).select_related('place', 'cubeusageinevent').first()
     if not event or not event.need_cube:
         return
-    abilities = models.AgitatorInRegion.get(event.place.region_id, user_telegram_id)
-    if not abilities or not abilities.is_admin:
+    if not models.AdminRights.has_admin_rights(user_telegram_id, event.place.region_id):
         return
     keyboard = [[InlineKeyboardButton('<< Назад', callback_data=MANAGE_EVENTS)]]
     if hasattr(event, 'cubeusageinevent'):
@@ -603,8 +602,7 @@ def set_cube_usage_button(bot, update, user_data):
 @region_decorator
 def manage_cubes(bot, update, user_data, region_id):
     user_telegram_id = update.effective_user.id
-    abilities = models.AgitatorInRegion.get(region_id, user_telegram_id)
-    if not abilities or not abilities.is_admin:
+    if not models.AdminRights.has_admin_rights(user_telegram_id, region_id):
         return MENU
     if 'cube_id' in user_data:
         cube = models.Cube.objects.filter(id=user_data['cube_id']).first()
@@ -645,8 +643,7 @@ def manage_cubes_button(bot, update, user_data):
 @region_decorator
 def create_new_cube(bot, update, user_data, region_id):
     user_telegram_id = update.effective_user.id
-    abilities = models.AgitatorInRegion.get(region_id, user_telegram_id)
-    if not abilities or not abilities.is_admin:
+    if not models.AdminRights.has_admin_rights(user_telegram_id, region_id):
         return MENU
     keyboard = [[InlineKeyboardButton('Выбрать место из старых', callback_data=SELECT_CUBE_STORAGE)],
                 [InlineKeyboardButton('Создать новое место', callback_data=CREATE_CUBE_STORAGE)],
@@ -750,8 +747,7 @@ def select_cube_storage_button(bot, update, user_data, region_id):
 @region_decorator
 def manage_events(bot, update, user_data, region_id):
     user_telegram_id = update.effective_user.id
-    abilities = models.AgitatorInRegion.get(region_id, user_telegram_id)
-    if not abilities or not abilities.is_admin:
+    if not models.AdminRights.has_admin_rights(user_telegram_id, region_id):
         return MENU
 
     if 'event_id' in user_data:
@@ -843,8 +839,7 @@ def manage_events_button(bot, update, user_data):
 @region_decorator
 def cancel_event(bot, update, user_data, region_id):
     user_telegram_id = update.effective_user.id
-    abilities = models.AgitatorInRegion.get(region_id, user_telegram_id)
-    if not abilities or not abilities.is_admin:
+    if not models.AdminRights.has_admin_rights(user_telegram_id, region_id):
         return MENU
     if 'event_id' not in user_data:
         return MENU

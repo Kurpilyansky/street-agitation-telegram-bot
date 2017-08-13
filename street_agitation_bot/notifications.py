@@ -40,8 +40,7 @@ def participant_button(bot, update, groups):
     if not participant:
         query.answer(text='Данная заявка не найдена. Что-то пошло не так :(', show_alert=True)
         return
-    #agitator_in_region = models.AgitatorInRegion.get(region.id, update.effective_user.id)
-    #if not (agitator_in_region and agitator_in_region.is_admin):
+    # if not models.AdminRights.has_admin_rights(user_telegram_id, region_id):
     #    query.answer(text='У вас нет прав на это действие', show_alert=True)
     #    return
 

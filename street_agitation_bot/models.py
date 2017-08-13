@@ -117,11 +117,23 @@ class User(models.Model):
         return '@%s (%s) @%s' % (self.telegram_id, self.full_name, self.telegram)
 
 
+class AdminRights(models.Model):
+    user = models.ForeignKey(User)
+    region = models.ForeignKey(Region, null=True, blank=True)
+
+    @classmethod
+    def has_admin_rights(cls, user_telegram_id, region_id):
+        return bool(cls.objects.filter(user__telegram_id=user_telegram_id)
+                               .filter(Q(region=None) | Q(region_id=region_id))
+                               .first())
+
+    class Meta:
+        unique_together = ('user', 'region')
+
+
 class AgitatorInRegion(models.Model):
     agitator = models.ForeignKey(User)
     region = models.ForeignKey(Region)
-
-    is_admin = models.BooleanField(default=False)
 
     have_registration = models.BooleanField(default=False)
     can_agitate = models.BooleanField(default=False)
