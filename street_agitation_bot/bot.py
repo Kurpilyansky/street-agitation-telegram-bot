@@ -428,8 +428,8 @@ def show_single_participation(bot, update, user_data):
                     text = p.agitator.show(private=(user.id == p.event.master_id))
                 participant_texts.append('%d. %s %s' % (i + 1, p.emoji_status(), text))
             if participant.event.need_cube:
-                if hasattr(participant.event, 'cubeusageinevent'):
-                    cube_usage_text = participant.event.cubeusageinevent.show(private=(user.id == participant.event.master_id))
+                if participant.event.cube_usage:
+                    cube_usage_text = participant.event.cube_usage.show(private=(user.id == participant.event.master_id))
                 else:
                     cube_usage_text = '_нет информации о доставке_'
                 status = cube_usage_text + '\n' + status
@@ -485,7 +485,7 @@ def set_cube_usage_start(bot, update, user_data):
     if not models.AdminRights.has_admin_rights(user_telegram_id, event.place.region_id):
         return MENU
     keyboard = [[InlineKeyboardButton('<< Назад', callback_data=MANAGE_EVENTS)]]
-    if hasattr(event, 'cubeusageinevent'):
+    if event.cube_usage:
         if 'field_name' in user_data:
             field_name = user_data['field_name']
             keyboard = [[InlineKeyboardButton('Отмена', callback_data=BACK)]]
@@ -774,7 +774,7 @@ def manage_events(bot, update, user_data, region_id):
     if 'event_id' in user_data:
         event = models.AgitationEvent.objects.filter(id=user_data['event_id']).select_related('place__region', 'cubeusageinevent').first()
         if event:
-            cube_usage = event.cubeusageinevent if hasattr(event, 'cubeusageinevent') else None
+            cube_usage = event.cube_usage
             applications = list(models.AgitationEventParticipant.objects.filter(event_id=user_data['event_id']).all())
             keyboard = list()
             if applications:

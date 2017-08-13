@@ -96,7 +96,7 @@ class DeliveryCubeToEventTask(AbstractTask):
         region = event.place.region
         if self._prev_message_id:
             utils.safe_delete_message(self._bot, region.registrations_chat_id, self._prev_message_id)
-        cube_usage = event.cubeusageinevent if hasattr(event, 'cubeusageinevent') else None
+        cube_usage = event.cube_usage
         if cube_usage and cube_usage.delivered_from and cube_usage.delivered_by:
             return
         new_message = self._bot.send_message(region.registrations_chat_id,
@@ -128,7 +128,7 @@ class ShipCubeFromEventTask(AbstractTask):
         region = event.place.region
         if self._prev_message_id:
             utils.safe_delete_message(self._bot, region.registrations_chat_id, self._prev_message_id)
-        cube_usage = event.cubeusageinevent if hasattr(event, 'cubeusageinevent') else None
+        cube_usage = event.cube_usage
         if cube_usage and cube_usage.shipped_to and cube_usage.shipped_by:
             return
         new_message = self._bot.send_message(region.registrations_chat_id,
@@ -159,7 +159,7 @@ class MakeTransferCubeTask(AbstractTask):
             id=self._event_id).select_related('cubeusageinevent', 'cubeusageinevent__cube').first()
         if not event or event.is_canceled:
             return
-        cube_usage = event.cubeusageinevent if hasattr(event, 'cubeusageinevent') else None
+        cube_usage = event.cube_usage
         if cube_usage and cube_usage.transferred_to_storage:
             return
         if not cube_usage or not cube_usage.shipped_by or not cube_usage.shipped_to:

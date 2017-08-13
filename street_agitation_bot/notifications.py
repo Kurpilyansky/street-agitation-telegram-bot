@@ -115,7 +115,7 @@ def notify_about_restoration_participation(bot, participant_id):
 def notify_about_cube_usage(bot, event_id):
     event = models.AgitationEvent.objects.filter(id=event_id).select_related(
         'cubeusageinevent', 'master', 'place__region').first()
-    if not event or not hasattr(event, 'cubeusageinevent'):
+    if not event or not event.cube_usage:
         return
     cube_usage = event.cubeusageinevent
     bot.send_message(event.place.region.registrations_chat_id,

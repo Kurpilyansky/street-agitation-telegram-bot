@@ -227,6 +227,10 @@ class AgitationEvent(models.Model):
     agitators_limit = models.IntegerField(null=True, blank=True)
 
     @property
+    def cube_usage(self):
+        return self.cubeusageinevent if hasattr(self, 'cubeusageinevent') else None
+
+    @property
     def region(self):
         return self.place.region
 
