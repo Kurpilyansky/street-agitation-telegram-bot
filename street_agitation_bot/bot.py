@@ -150,53 +150,52 @@ def show_profile(bot, update, user_data, region_id):
     send_message_text(bot, update, user_data, '\n'.join((profile, abilities)), parse_mode='Markdown', reply_markup=keyboard)
 
 
-def select_region(bot, update, user_data):
+def _build_add_region_keyboard(update, user_data):
+    show_all = user_data.get('show_all_regions', False)
+    user_telegram_id = update.effective_user.id
+    regions = list(models.Region.objects.filter(is_public=True))
+    my_regions = list(models.Region.objects.filter(agitatorinregion__agitator__telegram_id=user_telegram_id))
+    if not my_regions:
+        show_all = True
+    if show_all:
+        added_regions = {region.id for region in my_regions}
+    else:
+        regions = my_regions
+        added_regions = set()
+    keyboard = []
+    for region in regions:
+        text = region.show(markdown=False)
+        if region.id in added_regions:
+            text = EMOJI_OK + ' ' + text
+        keyboard.append(InlineKeyboardButton(text, callback_data=str(region.id)))
+    keyboard = utils.chunks(keyboard, 2)
+    if show_all:
+        keyboard.append([InlineKeyboardButton('Оставить только мои штабы', callback_data=NO)])
+    else:
+        keyboard.append([InlineKeyboardButton('Показать все штабы', callback_data=YES)])
+    return keyboard
+
+
+def select_region_start(bot, update, user_data):
     user = models.User.find_by_telegram_id(update.effective_user.id)
     if not user:
         return SET_LAST_NAME
-    regions = user.regions
-    if not regions:
-        return ADD_REGION
-    buttons = [InlineKeyboardButton(region.show(markdown=False), callback_data=str(region.id)) for region in regions]
-    keyboard = utils.chunks(buttons, 2)
-    keyboard.append([InlineKeyboardButton('Добавить другой регион', callback_data=ADD_REGION)])
-    send_message_text(bot, update, user_data, 'Выберите регион', reply_markup=InlineKeyboardMarkup(keyboard))
+    keyboard = _build_add_region_keyboard(update, user_data)
+    send_message_text(bot, update, user_data,
+                      'Выберите региональный штаб',
+                      reply_markup=InlineKeyboardMarkup(keyboard))
 
 
 def select_region_button(bot, update, user_data):
     query = update.callback_query
     query.answer()
-    if query.data == ADD_REGION:
-        return ADD_REGION
+    if query.data == YES:
+        user_data['show_all_regions'] = True
+    elif query.data == NO:
+        user_data['show_all_regions'] = False
     else:
-        region = models.Region.get_by_id(query.data)
-        user_data['region_id'] = query.data
-        send_message_text(bot, update, user_data, 'Выбран регион «%s»' % region.name)
+        user_data['region_id'] = int(query.data)
         return MENU
-
-
-def add_region_start(bot, update, user_data):
-    if 'unknown_region_name' in user_data:
-        text = 'Регион «%s» не зарегистрирован в системе.\n' \
-               'Введите название региона или города' % user_data['unknown_region_name']
-        del user_data['unknown_region_name']
-        send_message_text(bot, update, user_data, text)
-    else:
-        send_message_text(bot, update, user_data, 'Введите название региона или города')
-
-
-def add_region(bot, update, user_data):
-    user_telegram_id = update.effective_user.id
-    region_name = update.message.text
-    region = models.Region.find_by_name(region_name, user_telegram_id)
-    if region:
-        if models.AgitatorInRegion.get(region.id, user_telegram_id):
-            send_message_text(bot, update, user_data, 'Данный регион уже добавлен')
-            return MENU
-        user_data['region_id'] = region.id
-        return SET_ABILITIES
-    else:
-        user_data['unknown_region_name'] = region_name
 
 
 ABILITIES_TEXTS = {
@@ -266,6 +265,8 @@ def show_menu(bot, update, user_data):
         region_id = user_data['region_id']
         user_telegram_id = update.effective_user.id
         abilities = models.AgitatorInRegion.get(region_id, user_telegram_id)
+        if not abilities:
+            return SET_ABILITIES
         if abilities.can_be_applicant:
             keyboard.append([InlineKeyboardButton('Заявить новый куб', callback_data=CUBE_APPLICATION)])
         if models.AgitationEventParticipant.objects.filter(
@@ -279,7 +280,7 @@ def show_menu(bot, update, user_data):
             keyboard.append([InlineKeyboardButton('Логистика', callback_data=MANAGE_CUBES)])
             keyboard.append([InlineKeyboardButton('Сделать рассылку', callback_data=MAKE_BROADCAST)])
     else:
-        keyboard.append([InlineKeyboardButton('Выбрать регион', callback_data=SELECT_REGION)])
+        return SELECT_REGION
     send_message_text(bot, update, user_data, '*Меню*\nВыберите действие для продолжения работы', parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
 
 
@@ -1449,10 +1450,8 @@ def run_bot():
                            standard_callback_query_handler],
             SHOW_PROFILE: [EmptyHandler(show_profile, pass_user_data=True),
                            standard_callback_query_handler],
-            SELECT_REGION: [EmptyHandler(select_region, pass_user_data=True),
+            SELECT_REGION: [EmptyHandler(select_region_start, pass_user_data=True),
                             CallbackQueryHandler(select_region_button, pass_user_data=True)],
-            ADD_REGION: [EmptyHandler(add_region_start, pass_user_data=True),
-                         MessageHandler(Filters.text, add_region, pass_user_data=True)],
             SET_ABILITIES: [EmptyHandler(set_abilities, pass_user_data=True),
                             CallbackQueryHandler(set_abilities_button, pass_user_data=True)],
             SAVE_ABILITIES: [EmptyHandler(save_abilities, pass_user_data=True),

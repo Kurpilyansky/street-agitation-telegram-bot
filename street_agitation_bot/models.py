@@ -39,6 +39,9 @@ class Region(models.Model):
     def __str__(self):
         return self.name
 
+    class Meta:
+        ordering = ('name',)
+
 
 class User(models.Model):
     telegram_id = models.IntegerField(null=True, blank=True)
