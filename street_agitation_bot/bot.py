@@ -678,7 +678,7 @@ def create_cube_storage(bot, update, user_data):
     elif 'public_name' not in params:
         send_message_text(bot, update, user_data,
                           'Введите название с точностью до района города (без указания тоного адреса)')
-    elif 'holder' not in params:
+    elif 'holder_id' not in params:
         send_message_text(bot, update, user_data,
                           'С кем связаться?')
     elif 'location' not in params:
@@ -712,9 +712,10 @@ def create_cube_storage_message(bot, update, user_data):
     elif 'public_name' not in params:
         if Filters.text(message):
             params['public_name'] = message.text
-    elif 'holder' not in params:
+    elif 'holder_id' not in params:
         user = _extract_mentioned_user(message)
-        params['holder_id'] = user.id
+        if user:
+            params['holder_id'] = user.id
     elif 'location' not in params:
         if Filters.location(message):
             params['location'] = {
@@ -1087,6 +1088,22 @@ def _extract_mentioned_user(message):
                   'first_name': contact.first_name,
                   'last_name': contact.last_name,
                   }
+    elif Filters.text(message):
+        text = message.text
+        tokens = text.split()
+        phone, name = '', ''
+        for i in range(len(tokens)):
+            cur_phone = utils.clean_phone_number(' '.join(tokens[0:i + 1]))
+            cur_name = ' '.join(tokens[i + 1:])
+            if (len(phone), len(name)) < (len(cur_phone), len(cur_name)):
+                phone, name = cur_phone, cur_name
+            cur_phone = utils.clean_phone_number(' '.join(tokens[i:]))
+            cur_name = ' '.join(tokens[0:i])
+            if (len(phone), len(name)) < (len(cur_phone), len(cur_name)):
+                phone, name = cur_phone, cur_name
+        if len(phone) >= 5:
+            params = {'phone': phone,
+                      'first_name': name}
     if params:
         return models.User.update_or_create(params)[0]
 
