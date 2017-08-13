@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from django.db.models import Q
+from django.db import transaction
 
 from django.db import models
 
@@ -47,6 +48,31 @@ class User(models.Model):
     phone = models.CharField(max_length=50, blank=False, null=False)
 
     registration_date = models.DateTimeField(auto_now_add=True)
+
+    @classmethod
+    def _single(cls, query_set):
+        users = list(query_set[0:2])
+        print(list(map(str, users)))
+        if len(users) == 1:
+            return users[0]
+        return None
+
+    @classmethod
+    def update_or_create(cls, params):
+        params['phone'] = utils.clean_phone_number(params['phone'])
+        with transaction.atomic():
+            user_by_telegram_id = cls._single(cls.objects.filter(telegram_id=params.get('telegram_id', None)))
+            user_by_telegram = cls._single(cls.objects.filter(telegram=params.get('telegram', None)))
+            user_by_phone = cls._single(cls.objects.filter(phone=params.get('phone', None)))
+            candidate_ids = {u.id for u in [user_by_telegram_id, user_by_telegram, user_by_phone] if u}
+            if len(candidate_ids) > 1:
+                raise ValueError("User collisions")
+            elif len(candidate_ids) == 1:
+                old_id = candidate_ids.pop()
+                cls.objects.filter(id=old_id).update(**params)
+                return cls.objects.filter(id=old_id).first(), False
+            else:
+                return cls.objects.create(**params), True
 
     def show(self, markdown=True, private=True):
         if private:

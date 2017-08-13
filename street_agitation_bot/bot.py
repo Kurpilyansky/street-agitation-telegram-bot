@@ -111,12 +111,13 @@ def set_phone_text(bot, update, user_data):
 
 def save_profile(bot, update, user_data):
     user = update.effective_user
-    user, created = models.User.objects.update_or_create(
-        telegram_id=user.id,
-        defaults={'first_name': user_data.get('first_name'),
-                  'last_name': user_data.get('last_name'),
-                  'phone': utils.clean_phone_number(user_data.get('phone')),
-                  'telegram': user.username})
+    user, created = models.User.update_or_create(
+        params={'telegram_id': user.id,
+                'first_name': user_data.get('first_name'),
+                'last_name': user_data.get('last_name'),
+                'phone': user_data.get('phone'),
+                'telegram': user.username})
+    # TODO handle excetion 'User collisions'
 
     text = 'Спасибо за регистрацию!' if created else 'Данные профиля обновлены'
     if 'region_id' in user_data:
@@ -1079,7 +1080,7 @@ def _extract_mentioned_user(message):
         agitator_username = str(message.text[entity.offset:][:entity.length][1:])
         return models.User.objects.filter(telegram=agitator_username).first()
     elif entity.type == 'text_mention':
-        return models.User.find_by_id(entity.user.id)
+        return models.User.find_by_telegram_id(entity.user.id)
 
 
 def set_event_master_text(bot, update, user_data):
