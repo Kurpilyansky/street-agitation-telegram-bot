@@ -1073,17 +1073,31 @@ def set_event_master_start(bot, update, user_data):
 
 
 def _extract_mentioned_user(message):
-    if len(message.entities) != 1:
+    if len(message.entities) > 1:
         return
-    entity = message.entities[0]
-    if entity.type == 'mention':
-        agitator_username = str(message.text[entity.offset:][:entity.length][1:])
-        return models.User.objects.filter(telegram=agitator_username).first()
-    elif entity.type == 'text_mention':
-        return models.User.find_by_telegram_id(entity.user.id)
+    params = None
+    if len(message.entities) == 1:
+        entity = message.entities[0]
+        if entity.type == 'mention':
+            agitator_username = str(message.text[entity.offset:][:entity.length][1:])
+            return models.User.objects.filter(telegram=agitator_username).first()
+            ## TODO support non-registered users with username: how to check correctness of username?
+        elif entity.type == 'text_mention':
+            params = {'telegram_id': entity.user.id,
+                      'first_name': entity.first_name,
+                      'last_name': entity.last_name}
+    elif Filters.contact(message):
+        contact = message.contact
+        params = {'phone': contact.phone_number,
+                  'telegram_id': contact.user_id,
+                  'first_name': contact.first_name,
+                  'last_name': contact.last_name,
+                  }
+    if params:
+        return models.User.update_or_create(params)[0]
 
 
-def set_event_master_text(bot, update, user_data):
+def set_event_master_message(bot, update, user_data):
     user = _extract_mentioned_user(update.effective_message)
     if user:
         user_data['master_id'] = user.id
@@ -1095,7 +1109,7 @@ def set_event_place(bot, update, user_data):
         del user_data['place_id']
     keyboard = [[InlineKeyboardButton('Выбрать место из старых', callback_data=SELECT_EVENT_PLACE)],
                 [InlineKeyboardButton('Создать новое место', callback_data=SET_PLACE_ADDRESS)],
-                [InlineKeyboardButton('Назад', callback_data=SET_EVENT_NAME)]]
+                [InlineKeyboardButton('Назад', callback_data=SET_EVENT_MASTER)]]
     send_message_text(bot, update, user_data,
                       "Укажите место",
                       reply_markup=InlineKeyboardMarkup(keyboard))
@@ -1452,7 +1466,8 @@ def run_bot():
             SET_EVENT_NAME: [EmptyHandler(set_event_name, pass_user_data=True),
                              CallbackQueryHandler(set_event_name_button, pass_user_data=True)],
             SET_EVENT_MASTER: [EmptyHandler(set_event_master_start, pass_user_data=True),
-                               MessageHandler(Filters.text, set_event_master_text, pass_user_data=True)],
+                               MessageHandler(Filters.text | Filters.contact,
+                                              set_event_master_message, pass_user_data=True)],
             SET_EVENT_PLACE: [EmptyHandler(set_event_place, pass_user_data=True),
                               standard_callback_query_handler],
             SELECT_EVENT_PLACE: [EmptyHandler(select_event_place, pass_user_data=True),

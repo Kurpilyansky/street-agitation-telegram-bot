@@ -50,7 +50,11 @@ class User(models.Model):
     registration_date = models.DateTimeField(auto_now_add=True)
 
     @classmethod
-    def _single(cls, query_set):
+    def _single_by(cls, field_name, params):
+        field_value = params.get(field_name, None)
+        if not field_value:
+            return None
+        query_set = cls.objects.filter(**{field_name: field_value})
         users = list(query_set[0:2])
         print(list(map(str, users)))
         if len(users) == 1:
@@ -61,17 +65,27 @@ class User(models.Model):
     def update_or_create(cls, params):
         params['phone'] = utils.clean_phone_number(params['phone'])
         with transaction.atomic():
-            user_by_telegram_id = cls._single(cls.objects.filter(telegram_id=params.get('telegram_id', None)))
-            user_by_telegram = cls._single(cls.objects.filter(telegram=params.get('telegram', None)))
-            user_by_phone = cls._single(cls.objects.filter(phone=params.get('phone', None)))
+            user_by_telegram_id = cls._single_by('telegram_id', params)
+            user_by_telegram = cls._single_by('telegram', params)
+            user_by_phone = cls._single_by('phone', params)
             candidate_ids = {u.id for u in [user_by_telegram_id, user_by_telegram, user_by_phone] if u}
             if len(candidate_ids) > 1:
                 raise ValueError("User collisions")
             elif len(candidate_ids) == 1:
+                if not params.get('first_name', None):
+                    params.pop('first_name', None)
+                if not params.get('last_name', None):
+                    params.pop('last_name', None)
+
                 old_id = candidate_ids.pop()
                 cls.objects.filter(id=old_id).update(**params)
                 return cls.objects.filter(id=old_id).first(), False
             else:
+                if not params.get('first_name', None):
+                    params['first_name'] = '?'
+                if not params.get('last_name', None):
+                    params['last_name'] = '?'
+                print(params)
                 return cls.objects.create(**params), True
 
     def show(self, markdown=True, private=True):
