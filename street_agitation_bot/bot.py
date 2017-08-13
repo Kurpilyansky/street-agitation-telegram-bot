@@ -276,7 +276,7 @@ def show_menu(bot, update, user_data):
         if abilities.is_admin:
             keyboard.append([InlineKeyboardButton('Добавить ивент', callback_data=SET_EVENT_NAME)])
             keyboard.append([InlineKeyboardButton('Управление ивентами', callback_data=MANAGE_EVENTS)])
-            keyboard.append([InlineKeyboardButton('Управление кубами', callback_data=MANAGE_CUBES)])
+            keyboard.append([InlineKeyboardButton('Логистика', callback_data=MANAGE_CUBES)])
             keyboard.append([InlineKeyboardButton('Сделать рассылку', callback_data=MAKE_BROADCAST)])
     else:
         keyboard.append([InlineKeyboardButton('Выбрать регион', callback_data=SELECT_REGION)])
@@ -772,7 +772,7 @@ def manage_events(bot, update, user_data, region_id):
                 text = "Никто не записался на это мероприятие :("
             if not event.is_canceled:
                 if event.need_cube:
-                    keyboard.append([InlineKeyboardButton('Доставка куба', callback_data=SET_CUBE_USAGE)])
+                    keyboard.append([InlineKeyboardButton('Логистика', callback_data=SET_CUBE_USAGE)])
                 keyboard.append([InlineKeyboardButton('Отменить мероприятие', callback_data=CANCEL_EVENT)])
             keyboard.append([InlineKeyboardButton('<< Назад', callback_data=BACK)])
 
