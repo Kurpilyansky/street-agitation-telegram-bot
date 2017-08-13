@@ -46,7 +46,7 @@ class User(models.Model):
     last_name = models.CharField(max_length=200, blank=False, null=False)
     phone = models.CharField(max_length=50, blank=False, null=False)
 
-    registration_date = models.DateTimeField()
+    registration_date = models.DateTimeField(auto_now_add=True)
 
     def show(self, markdown=True, private=True):
         if private:
