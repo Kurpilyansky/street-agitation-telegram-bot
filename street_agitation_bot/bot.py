@@ -481,9 +481,9 @@ def set_cube_usage_start(bot, update, user_data):
     event_id = user_data['event_id']
     event = models.AgitationEvent.objects.filter(id=event_id).select_related('place', 'cubeusageinevent').first()
     if not event or not event.need_cube:
-        return
+        return MANAGE_EVENTS
     if not models.AdminRights.has_admin_rights(user_telegram_id, event.place.region_id):
-        return
+        return MENU
     keyboard = [[InlineKeyboardButton('<< Назад', callback_data=MANAGE_EVENTS)]]
     if hasattr(event, 'cubeusageinevent'):
         if 'field_name' in user_data:
@@ -1377,6 +1377,7 @@ def show_event_for_master(bot, update, user_data, groups):
 
 def transfer_cube_to_event(bot, update, user_data, groups):
     query = update.callback_query
+    print(query.data, groups)
     query.answer()
     event_id = int(groups[0])
     user_data['event_id'] = event_id
@@ -1496,11 +1497,11 @@ def run_bot():
         },
         pre_fallbacks=[CallbackQueryHandler(force_button_query_handler, pattern='^%s_' % FORCE_BUTTON, pass_user_data=True),
                        CallbackQueryHandler(show_event_for_master,
-                                            pattern='^%s(\d)+$' % SHOW_EVENT_FOR_MASTER,
+                                            pattern='^%s(\d+)$' % SHOW_EVENT_FOR_MASTER,
                                             pass_groups=True,
                                             pass_user_data=True),
                        CallbackQueryHandler(transfer_cube_to_event,
-                                            pattern='^%s(\d)+$' % TRANSFER_CUBE_TO_EVENT,
+                                            pattern='^%s(\d+)$' % TRANSFER_CUBE_TO_EVENT,
                                             pass_groups=True,
                                             pass_user_data=True)],
         fallbacks=[CommandHandler('cancel', cancel, pass_user_data=True),
