@@ -115,7 +115,7 @@ def save_profile(bot, update, user_data):
         telegram_id=user.id,
         defaults={'first_name': user_data.get('first_name'),
                   'last_name': user_data.get('last_name'),
-                  'phone': user_data.get('phone'),
+                  'phone': utils.clean_phone(user_data.get('phone')),
                   'telegram': user.username})
 
     text = 'Спасибо за регистрацию!' if created else 'Данные профиля обновлены'
