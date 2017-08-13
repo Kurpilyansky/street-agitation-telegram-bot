@@ -343,10 +343,11 @@ class CubeUsageInEvent(models.Model):
     shipped_by = models.ForeignKey(Agitator, null=True, blank=True, related_name='usage_shipped_by')
 
     def show(self, markdown=True, private=False):
-        return '%s %s -> %s %s' % (self.delivered_from.show(markdown, private) if self.delivered_from else '',
-                                   self.delivered_by.show(markdown, private) if self.delivered_by else '',
-                                   self.shipped_to.show(markdown, private) if self.shipped_to else '',
-                                   self.shipped_by.show(markdown, private) if self.shipped_by else '')
+        return '%s привезет из %s\n%s отвезет в %s' % (
+            self.delivered_by.show(markdown, private) if self.delivered_by else '???',
+            self.delivered_from.show(markdown, private) if self.delivered_from else '???',
+            self.shipped_by.show(markdown, private) if self.shipped_by else '???',
+            self.shipped_to.show(markdown, private) if self.shipped_to else '???')
 
     class Meta:
         unique_together = ('event',)

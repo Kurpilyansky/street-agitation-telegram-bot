@@ -484,7 +484,45 @@ def set_cube_usage_start(bot, update, user_data):
         return
     keyboard = [[InlineKeyboardButton('<< Назад', callback_data=MANAGE_EVENTS)]]
     if hasattr(event, 'cubeusageinevent'):
+        if 'field_name' in user_data:
+            field_name = user_data['field_name']
+            keyboard = [[InlineKeyboardButton('Отмена', callback_data=BACK)]]
+            if field_name == 'delivered_from':
+                cubes = list(models.Cube.objects.filter(region=event.place.region_id))
+                cubes = list(filter(lambda c: c.is_available_for(event), cubes))
+                keyboard = [[InlineKeyboardButton(cube.last_storage.show(markdown=False, private=True),
+                                                  callback_data=SELECT_CUBE_FOR_EVENT + str(cube.id))]
+                            for cube in cubes] + keyboard
+                send_message_text(bot, update, user_data,
+                                  'Выберите куб для %s %s' % (event.show(), event.place.show()),
+                                  reply_markup=InlineKeyboardMarkup(keyboard),
+                                  parse_mode='Markdown')
+            elif field_name == 'delivered_by':
+                send_message_text(bot, update, user_data,
+                                  'Укажите, кто привезет куб на %s %s ' % (event.show(), event.place.show()),
+                                  reply_markup=InlineKeyboardMarkup(keyboard),
+                                  parse_mode='Markdown')
+            elif field_name == 'shipped_by':
+                send_message_text(bot, update, user_data,
+                                  'Укажите, кто увезет куб после %s %s' % (event.show(), event.place.show()),
+                                  reply_markup=InlineKeyboardMarkup(keyboard),
+                                  parse_mode='Markdown')
+            elif field_name == 'shipped_to':
+                storages = list(models.Storage.objects.filter(region_id=event.place.region_id))
+                keyboard = [[InlineKeyboardButton(storage.show(private=True, markdown=False),
+                                                  callback_data=str(storage.id))]
+                            for storage in storages] + keyboard
+                send_message_text(bot, update, user_data,
+                                  'Куда увезут куб после %s %s' % (event.show(), event.place.show()),
+                                  reply_markup=InlineKeyboardMarkup(keyboard),
+                                  parse_mode='Markdown')
+            return
         cube_usage = event.cubeusageinevent
+        keyboard = [[InlineKeyboardButton('Изменить «откуда привезет»', callback_data='delivered_from')],
+                    [InlineKeyboardButton('Изменить «кто привезет»', callback_data='delivered_by')],
+                    [InlineKeyboardButton('Изменить «куда отвезет»', callback_data='shipped_to')],
+                    [InlineKeyboardButton('Изменить «кто отвезет»', callback_data='shipped_by')]
+                    ] + keyboard
         send_message_text(bot, update, user_data,
                           cube_usage.show(private=True),
                           reply_markup=InlineKeyboardMarkup(keyboard),
@@ -508,11 +546,45 @@ def set_cube_usage_start(bot, update, user_data):
                           parse_mode='Markdown')
 
 
+def set_cube_usage_message(bot, update, user_data):
+    if 'field_name' in user_data:
+        telegram_id = _extract_mentioned_user_id(update.message)
+        if user_data['field_name'] == 'delivered_by':
+            models.CubeUsageInEvent.objects.filter(
+                event_id=user_data['event_id']
+            ).update(delivered_by=telegram_id)
+            del user_data['field_name']
+        elif user_data['field_name'] == 'shipped_by':
+            models.CubeUsageInEvent.objects.filter(
+                event_id=user_data['event_id']
+            ).update(shipped_by=telegram_id)
+            del user_data['field_name']
+
+
 def set_cube_usage_button(bot, update, user_data):
     query = update.callback_query
     query.answer()
+    if 'field_name' in user_data:
+        if query.data == BACK:
+            del user_data['field_name']
+        elif user_data['field_name'] == 'shipped_to':
+            storage_id = int(query.data)
+            models.CubeUsageInEvent.objects.filter(
+                event_id=user_data['event_id']
+            ).update(shipped_to=storage_id)
+            del user_data['field_name']
+        elif user_data['field_name'] == 'delivered_from':
+            cube_id = int(query.data)
+            cube = models.Cube.objects.filter(id=cube_id).first()
+            models.CubeUsageInEvent.objects.filter(
+                event_id=user_data['event_id']
+            ).update(cube_id=cube_id, delivered_from_id=cube.last_storage_id)
+            del user_data['field_name']
     if query.data in [MANAGE_CUBES, MANAGE_EVENTS]:
         return query.data
+    elif query.data in ['delivered_from', 'delivered_by', 'shipped_to', 'shipped_by']:
+        user_data['field_name'] = query.data
+        return
     else:
         match = re.match('^SELECT_CUBE_FOR_EVENT(\d+)$', query.data)
         if bool(match):
@@ -1370,8 +1442,8 @@ def run_bot():
             CANCEL_EVENT: [EmptyHandler(cancel_event, pass_user_data=True),
                            CallbackQueryHandler(cancel_event_button, pass_user_data=True)],
             SET_CUBE_USAGE: [EmptyHandler(set_cube_usage_start, pass_user_data=True),
-                             CallbackQueryHandler(set_cube_usage_button, pass_user_data=True)],
-                             # MessageHandler(Filters.text, set_cube_usage_text, pass_user_data=True)],
+                             CallbackQueryHandler(set_cube_usage_button, pass_user_data=True),
+                             MessageHandler(Filters.text, set_cube_usage_message, pass_user_data=True)],
             APPLY_TO_AGITATE: [EmptyHandler(apply_to_agitate, pass_user_data=True),
                                CallbackQueryHandler(apply_to_agitate_button, pass_user_data=True)],
             APPLY_TO_AGITATE_PLACE: [EmptyHandler(apply_to_agitate_place, pass_user_data=True),
