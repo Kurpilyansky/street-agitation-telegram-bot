@@ -32,25 +32,25 @@ class CronTab:
         self.queue = PriorityQueue()
 
     def add_task(self, task):
-        self.queue.push((task.moment, task))
+        self.queue.push(task)
 
     def process_tasks(self):
         for i in range(10):
-            item = self.queue.top()
-            if not item:
+            task = self.queue.top()
+            if not task:
                 break
-            moment, task = item
-            if moment > datetime.now():
+            moment = task.moment
+            if moment > datetime.utcnow():
                 break
             self.queue.pop()
             last_run = models.TaskRun.get_last_run(task.get_key())
-            if last_run and last_run.scheduled_moment <= moment:
+            if last_run and moment <= last_run.run_moment:
                 task.repeat()
             else:
                 if task.process():
                     models.TaskRun.objects.create(task_key=task.get_key(),
                                                   scheduled_moment=moment,
-                                                  run_moment=datetime.now())
+                                                  run_moment=datetime.utcnow())
 
 
 class AbstractTask:
@@ -59,6 +59,9 @@ class AbstractTask:
         self._repeat_timespan = repeat_timespan
         self._bot = bot
         self._cron_tab = cron_tab
+
+    def __lt__(self, other):
+        return self.moment < other.moment
 
     def get_key(self):
         pass
@@ -91,7 +94,7 @@ class DeliveryCubeToEventTask(AbstractTask):
         if self._prev_message_id:
             utils.safe_delete_message(self._bot, region.registrations_chat_id, self._prev_message_id)
         cube_usage = event.cubeusageinevent if hasattr(event, 'cubeusageinevent') else None
-        if cube_usage and cube_usage.delivered_from and cube_usage.delivered_to:
+        if cube_usage and cube_usage.delivered_from and cube_usage.delivered_by:
             return
         new_message = self._bot.send_message(region.registrations_chat_id,
                                              'Необходимо доставить куб на %s %s' % (event.show(), event.place.show()),
@@ -107,7 +110,7 @@ class DeliveryCubeToEventTask(AbstractTask):
 def _cron_cycle(cron_tab):
     while True:
         cron_tab.process_tasks()
-        sleep(1)
+        sleep(0.1)
 
 
 cron_tab = None

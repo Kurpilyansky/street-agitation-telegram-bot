@@ -42,7 +42,7 @@ def send_message_text(bot, update, user_data, *args, **kwargs):
     user_data.pop('last_bot_message_ts', None)
     location = kwargs.get('location', {})
     kwargs.pop('location', None)
-    cur_ts = datetime.now().timestamp()
+    cur_ts = datetime.utcnow().timestamp()
     for message_id in last_bot_message_ids:
         utils.safe_delete_message(bot, update.effective_user.id, message_id)
     new_message_ids = []
@@ -336,7 +336,7 @@ def make_broadcast_confirm_button(bot, update, user_data, region_id):
 @region_decorator
 def show_schedule(bot, update, user_data, region_id):
     events = list(models.AgitationEvent.objects.filter(
-        end_date__gte=datetime.now(),
+        end_date__gte=datetime.utcnow(),
         place__region_id=region_id,
         is_canceled=False
     ).select_related('place', 'place__region'))
@@ -825,13 +825,13 @@ def apply_to_agitate(bot, update, user_data, region_id):
     offset = user_data['events_offset']
     if offset < 0:
         offset = 0
-    query_set = models.AgitationEvent.objects.filter(end_date__gte=datetime.now(),
+    query_set = models.AgitationEvent.objects.filter(end_date__gte=datetime.utcnow(),
                                                      place__region_id=region_id,
                                                      is_canceled=False)
     events = list(query_set.select_related('place')[offset:offset + EVENT_PAGE_SIZE])
     participations = list(models.AgitationEventParticipant.objects.filter(
         agitator_id=agitator_id,
-        event__end_date__gte=datetime.now(),
+        event__end_date__gte=datetime.utcnow(),
         event__place__region_id=region_id).all())
     exclude_event_ids = {p.event_id: True for p in participations}
     keyboard = list()
