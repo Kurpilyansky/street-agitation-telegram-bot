@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 
+from django.db.models import Q
+
 from django.db import models
 
 from street_agitation_bot import bot_settings, utils
@@ -45,6 +47,12 @@ class Agitator(models.Model):
     phone = models.CharField(max_length=50, blank=False, null=False)
 
     registration_date = models.DateTimeField(auto_now_add=True)
+
+    def show(self, markdown=True, private=True):
+        if private:
+            return self.show_full()
+        else:
+            return self.full_name
 
     @property
     def full_name(self):
@@ -296,19 +304,49 @@ class Storage(models.Model):
     geo_latitude = models.FloatField(null=True, blank=True)
     geo_longitude = models.FloatField(null=True, blank=True)
 
+    def show(self, markdown=True, private=False):
+        name = self.private_name if private else self.public_name
+        if markdown:
+            return '*%s*' % utils.escape_markdown(name)
+        else:
+            return name
+
+    def __str__(self):
+        return self.show(markdown=False, private=True)
+
 
 class Cube(models.Model):
     region = models.ForeignKey(Region)
     last_storage = models.ForeignKey(Storage)
 
+    def show(self, markdown=True, private=False):
+        return self.last_storage.show(markdown, private)
+
+    def __str__(self):
+        return '%d %s' % (self.id, str(self.last_storage))
+
+    def is_available_for(self, event):
+        usage = CubeUsageInEvent.objects.filter(cube_id=self.id).filter(
+            (Q(event__start_date__lte=event.end_date) & Q(event__end_date__gte=event.start_date))
+            | (Q(event__end_date__gte=event.start_date) & Q(event__start_date__lte=event.end_date))
+            ## TODO check this formula
+        ).first()
+        return usage is None
+
 
 class CubeUsageInEvent(models.Model):
-    event = models.ForeignKey(AgitationEvent)
+    event = models.OneToOneField(AgitationEvent)
     cube = models.ForeignKey(Cube)
     delivered_from = models.ForeignKey(Storage, null=True, blank=True, related_name='usage_delivered_from')
     delivered_by = models.ForeignKey(Agitator, null=True, blank=True, related_name='usage_delivered_by')
     shipped_to = models.ForeignKey(Storage, null=True, blank=True, related_name='usage_shipped_to')
     shipped_by = models.ForeignKey(Agitator, null=True, blank=True, related_name='usage_shipped_by')
+
+    def show(self, markdown=True, private=False):
+        return '%s %s -> %s %s' % (self.delivered_from.show(markdown, private) if self.delivered_from else '',
+                                   self.delivered_by.show(markdown, private) if self.delivered_by else '',
+                                   self.shipped_to.show(markdown, private) if self.shipped_to else '',
+                                   self.shipped_by.show(markdown, private) if self.shipped_by else '')
 
     class Meta:
         unique_together = ('event',)

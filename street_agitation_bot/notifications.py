@@ -24,7 +24,7 @@ def edit_participant_message(message, participant):
         message.edit_text('%s\nРегион %s\n%s %s\nВолонтер %s'
                           % (participant.emoji_status(True),
                              participant.place.region.show(), participant.event.show(),
-                             participant.place.show(), participant.agitator.show_full()),
+                             participant.place.show(), participant.agitator.show(private=True)),
                           parse_mode='Markdown',
                           reply_markup=InlineKeyboardMarkup(keyboard))
     except telegram.error.BadRequest:
@@ -66,7 +66,7 @@ def notify_about_new_registration(bot, region_id, agitator_id, text):
     agitator = models.Agitator.find_by_id(agitator_id)
     bot.send_message(region.registrations_chat_id,
                      'Новая анкета\nРегион %s\n%s%s'
-                     % (region.show(), agitator.show_full(), text),
+                     % (region.show(), agitator.show(private=True), text),
                      parse_mode="Markdown")
 
 
@@ -88,7 +88,7 @@ def _notify_about_participant(bot, participant_id, text):
         if place.registrations_chat_id:
             chat_ids.append(place.registrations_chat_id)
     full_text = '%s %s\nРегион %s\n%s %s' % (
-        agitator.show_full(), text, region.show(), event.show(), place.show())
+        agitator.show(private=True), text, region.show(), event.show(), place.show())
     for chat_id in chat_ids:
         bot.send_message(chat_id,
                          text=full_text,
@@ -96,7 +96,7 @@ def _notify_about_participant(bot, participant_id, text):
                          reply_markup=InlineKeyboardMarkup(keyboard))
     if event.master.telegram_id > 0:
         bot.send_message(event.master.telegram_id,
-                         text='%s %s в %s %s' % (agitator.full_name, text, event.show(), place.show()),
+                         text='%s %s в %s %s' % (agitator.show(), text, event.show(), place.show()),
                          parse_mode='Markdown',
                          reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(
                              'Посмотреть все заявки', callback_data=SHOW_EVENT_FOR_MASTER+str(event.id))]]))

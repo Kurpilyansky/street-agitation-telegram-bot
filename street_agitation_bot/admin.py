@@ -168,6 +168,65 @@ class ConversationStateAdmin(VersionAdmin):
     )
 
 
+class TaskRunAdmin(VersionAdmin):
+    list_display = (
+        'task_key',
+        'scheduled_moment',
+        'run_moment',
+    )
+    list_filter = (
+    )
+    search_fields = (
+        'task_key',
+    )
+
+
+class StorageAdmin(VersionAdmin):
+    list_display = (
+        'region',
+        'public_name',
+        'private_name',
+        'holder',
+    )
+    list_filter = (
+        'region',
+    )
+    search_fields = (
+        'public_name',
+        'private_name',
+        'holder__first_name',
+        'holder__last_name',
+        'holder__telegram',
+        '=holder__telegram_id',
+    )
+
+
+class CubeAdmin(VersionAdmin):
+    list_display = (
+        'region',
+        'last_storage',
+    )
+    list_filter = (
+        'region',
+        'last_storage',
+    )
+    search_fields = (
+    )
+
+
+class CubeUsageInEventAdmin(VersionAdmin):
+    list_display = (
+        # 'cube__region__name',
+        'cube',
+        'event',
+    )
+    list_filter = (
+        'cube__region',
+    )
+    search_fields = (
+    )
+
+
 admin.site.register(models.Region, RegionAdmin)
 admin.site.register(models.Agitator, AgitatorAdmin)
 admin.site.register(models.AgitatorInRegion, AgitatorInRegionAdmin)
@@ -176,3 +235,7 @@ admin.site.register(models.AgitationPlaceHierarchy, AgitationPlaceHierarchyAdmin
 admin.site.register(models.AgitationEvent, AgitationEventAdmin)
 admin.site.register(models.AgitationEventParticipant, AgitationEventParticipantAdmin)
 admin.site.register(models.ConversationState, ConversationStateAdmin)
+admin.site.register(models.TaskRun, TaskRunAdmin)
+admin.site.register(models.Storage, StorageAdmin)
+admin.site.register(models.Cube, CubeAdmin)
+admin.site.register(models.CubeUsageInEvent, CubeUsageInEventAdmin)

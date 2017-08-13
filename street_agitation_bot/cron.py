@@ -90,11 +90,11 @@ class DeliveryCubeToEventTask(AbstractTask):
         region = event.place.region
         if self._prev_message_id:
             utils.safe_delete_message(self._bot, region.registrations_chat_id, self._prev_message_id)
-        cube_usage = event.cubeusageinevent
+        cube_usage = event.cubeusageinevent if hasattr(event, 'cubeusageinevent') else None
         if cube_usage and cube_usage.delivered_from and cube_usage.delivered_to:
             return
         new_message = self._bot.send_message(region.registrations_chat_id,
-                                             'Необходимо доставить куб на %s' % event.show(),
+                                             'Необходимо доставить куб на %s %s' % (event.show(), event.place.show()),
                                              parse_mode='Markdown',
                                              reply_markup=InlineKeyboardMarkup([[
                                                 InlineKeyboardButton(
