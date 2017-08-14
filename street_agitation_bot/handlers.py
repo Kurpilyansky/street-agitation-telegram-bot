@@ -24,7 +24,7 @@ import logging
 from street_agitation_bot import models
 
 from telegram import Update
-from telegram.ext import (Handler, CallbackQueryHandler, InlineQueryHandler,
+from telegram.ext import (Filters, Handler, CallbackQueryHandler, InlineQueryHandler,
                           ChosenInlineResultHandler)
 from telegram.utils.promise import Promise
 
@@ -112,7 +112,6 @@ class ConversationHandler(Handler):
                  unknown_state_handler,
                  fallbacks,
                  pre_fallbacks,
-                 filters=None,
                  allow_reentry=False,
                  run_async_timeout=None,
                  timed_out_behavior=None,
@@ -129,8 +128,6 @@ class ConversationHandler(Handler):
         self.pre_fallbacks = pre_fallbacks
         self.fallbacks = fallbacks
         """:type: list[telegram.ext.Handler]"""
-
-        self.filters = filters
 
         self.allow_reentry = allow_reentry
         self.run_async_timeout = run_async_timeout
@@ -191,7 +188,7 @@ class ConversationHandler(Handler):
                 # or self.per_message and not update.callback_query
                 # or update.callback_query and self.per_chat and not update.callback_query.message):
             return False
-        if self.filters and not self.filters(update.effective_message):
+        if not update.callback_query and Filters.group(update.effective_message):
             return False
 
         key = self._get_key(update)
@@ -321,10 +318,11 @@ class ConversationHandler(Handler):
             else:
                 self._state_in_database[key] = models.ConversationState(key=key)
 
-    def _save_state(self, key, dispatcher, agitator_id):
+    def _save_state(self, key, dispatcher, user_telegram_id):
         state_in_database = self._state_in_database.get(key, models.ConversationState(key=key))
-        if models.Agitator.find_by_id(agitator_id):
-            state_in_database.agitator_id = agitator_id
+        user = models.User.find_by_telegram_id(user_telegram_id)
+        if user:
+            state_in_database.agitator = user
         state_in_database.state = self.conversations.get(key)
         state_in_database.data = json.dumps(dispatcher.user_data.get(key))
         state_in_database.save()

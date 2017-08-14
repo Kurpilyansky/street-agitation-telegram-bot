@@ -8,6 +8,17 @@ from street_agitation_bot import models
 from datetime import timedelta
 
 
+def apply_change(region, new_timezone_delta):
+    diff = timedelta(seconds=new_timezone_delta - region.timezone_delta)
+    with transaction.atomic():
+        models.AgitationEvent.objects.filter(place__region_id=region.id).update(
+            start_date=F('start_date') - diff,
+            end_date=F('end_date') - diff,
+        )
+        region.timezone_delta = new_timezone_delta
+        region.save()
+
+
 class Command(management_base.BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument('--region-name', type=str, help='region name')
@@ -23,12 +34,4 @@ class Command(management_base.BaseCommand):
         if region.timezone_delta == new_timezone_delta:
             return
 
-        diff = timedelta(seconds=new_timezone_delta - region.timezone_delta)
-
-        with transaction.atomic():
-            models.AgitationEvent.objects.filter(place__region_id=region.id).update(
-                start_date=F('start_date') - diff,
-                end_date=F('end_date') - diff,
-            )
-            region.timezone_delta = new_timezone_delta
-            region.save()
+        apply_change(region, new_timezone_delta)
