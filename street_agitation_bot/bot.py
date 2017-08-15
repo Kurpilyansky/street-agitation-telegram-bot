@@ -1102,8 +1102,8 @@ def set_event_name_button(bot, update, user_data):
 
 
 def set_event_name_text(bot, update, user_data):
-    user_data['event_name'] = query.message.text
-    return EVENT_MASTER
+    user_data['event_name'] = update.message.text
+    return SET_EVENT_MASTER
 
 
 def set_event_master_start(bot, update, user_data):
