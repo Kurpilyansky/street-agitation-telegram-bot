@@ -1101,6 +1101,11 @@ def set_event_name_button(bot, update, user_data):
     return SET_EVENT_MASTER
 
 
+def set_event_name_text(bot, update, user_data):
+    user_data['event_name'] = query.message.text
+    return EVENT_MASTER
+
+
 def set_event_master_start(bot, update, user_data):
     send_message_text(bot, update, user_data, 'Укажите волонтера, ответственного за этот ивент')
 
@@ -1511,7 +1516,8 @@ def run_bot():
             APPLY_TO_AGITATE_PLACE: [EmptyHandler(apply_to_agitate_place, pass_user_data=True),
                                      CallbackQueryHandler(apply_to_agitate_place_button, pass_user_data=True)],
             SET_EVENT_NAME: [EmptyHandler(set_event_name, pass_user_data=True),
-                             CallbackQueryHandler(set_event_name_button, pass_user_data=True)],
+                             CallbackQueryHandler(set_event_name_button, pass_user_data=True),
+                             MessageHandler(Filters.text, set_event_name_text, pass_user_data=True)],
             SET_EVENT_MASTER: [EmptyHandler(set_event_master_start, pass_user_data=True),
                                MessageHandler(Filters.text | Filters.contact,
                                               set_event_master_message, pass_user_data=True)],
