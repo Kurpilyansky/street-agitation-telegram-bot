@@ -91,7 +91,7 @@ class DeliveryCubeToEventTask(AbstractTask):
 
     def process(self):
         event = models.AgitationEvent.objects.select_related('place__region', 'cubeusageinevent').filter(id=self._event_id).first()
-        if not event:
+        if not event or event.is_canceled:
             return
         region = event.place.region
         if self._prev_message_id:
