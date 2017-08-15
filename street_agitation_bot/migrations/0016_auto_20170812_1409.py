@@ -88,8 +88,4 @@ class Migration(migrations.Migration):
             name='region',
             field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='street_agitation_bot.Region'),
         ),
-        migrations.AlterUniqueTogether(
-            name='cubeusageinevent',
-            unique_together=set([('event',)]),
-        ),
     ]

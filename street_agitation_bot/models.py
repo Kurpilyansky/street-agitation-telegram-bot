@@ -409,9 +409,6 @@ class CubeUsageInEvent(models.Model):
             self.shipped_by.show(markdown, private) if self.shipped_by else '???',
             self.shipped_to.show(markdown, private) if self.shipped_to else '???')
 
-    class Meta:
-        unique_together = ('event',)
-
 
 class AgitationEventReport(models.Model):
     start_date = models.DateTimeField(help_text='Фактическое время начала', null=True, blank=True)
