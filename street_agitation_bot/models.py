@@ -332,6 +332,10 @@ class AgitationEventParticipant(models.Model):
         return cls.objects.filter(agitator__telegram_id=telegram_id, event_id=event_id).first()
 
     @classmethod
+    def get_all(cls, event_id):
+        return cls.objects.filter(event_id=event_id).all()
+
+    @classmethod
     def get_count(cls, event_id, place_id):
         return cls.objects.filter(event_id=event_id, place_id=place_id,
                                   declined=False, canceled=False).count()

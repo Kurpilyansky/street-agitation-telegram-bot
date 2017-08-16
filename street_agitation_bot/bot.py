@@ -414,7 +414,7 @@ def show_participations(bot, update, user_data, region_id):
             p_text = p.emoji_status() + " " + p.event.show(markdown=False) + " " + p.place.show(markdown=False)
             if p.event.place.region_id != region_id:
                 p_text = '*%s* %s' % (p.event.place.region.name, p_text)
-            keyboard.append([InlineKeyboardButton(p_text, callback_data=str(p.id))])
+            keyboard.append([InlineKeyboardButton(p_text, callback_data=str(p.event_id))])
         text = "*Вы записались на следующие мероприятия*"
     else:
         text = "Вы не записались ни на одно мероприятие в будущем"
@@ -433,79 +433,136 @@ def show_participations_button(bot, update, user_data):
     else:
         match = re.match('^\d+$', query.data)
         if bool(match):
-            user_data['participant_id'] = int(query.data)
-            return SHOW_SINGLE_PARTICIPATION
+            user_data['event_id'] = int(query.data)
+            return SHOW_EVENT_PARTICIPANTS
 
 
-def show_single_participation(bot, update, user_data):
+def _back_from_show_event_participants(user_data):
+    user_data.pop('event_id', None)
+    user_data.pop('participant_id', None)
+    return user_data.pop('back_state', SHOW_PARTICIPATIONS)
+
+
+@region_decorator
+def show_event_participants(bot, update, user_data, region_id):
     user_telegram_id = update.effective_user.id
-    if 'participant_id' not in user_data:
-        return SHOW_PARTICIPATIONS
-    participant = models.AgitationEventParticipant.objects.filter(
-        id=user_data['participant_id']).select_related('event', 'place', 'event__place__region', 'event__cubeusageinevent').first()
-    if not participant or participant.agitator.telegram_id != user_telegram_id:
-        del user_data['participant_id']
-        return SHOW_PARTICIPATIONS
-    user = models.User.find_by_telegram_id(user_telegram_id)
-    event_text = participant.event.show() + " " + participant.place.show()
-    if participant.canceled:
-        status = '%s Вы отменили свою заявку' % participant.emoji_status()
-    elif participant.declined:
-        status = '%s Вашу заявку отклонили' % participant.emoji_status()
-    elif participant.approved:
-        status = '%s Ваше участие одобрили.' % participant.emoji_status()
-        if participant.place.post_apply_text:
-            status = '%s\n%s' % (status, participant.place.post_apply_text)
+    if 'event_id' not in user_data:
+        return _back_from_show_event_participants(user_data)
+    event = models.AgitationEvent.objects.filter(id=user_data['event_id']
+                                                 ).select_related('place', 'cubeusageinevent').first()
+    if not event:
+        return _back_from_show_event_participants(user_data)
+    is_event_admin = models.AdminRights.has_admin_rights_for_event(user_telegram_id, event)
+
+    participant = models.AgitationEventParticipant.get(user_telegram_id, event.id)
+    if not participant:
+        if is_event_admin:
+            place = event.place
         else:
-            participants = participant.get_neighbours()
-            status = '%s Записались %d%s' % (status, len(participants), EMOJI_HUMAN)
-            participant_texts = list()
-            for i, p in enumerate(participants):
+            return _back_from_show_event_participants(user_data)
+    else:
+        user_data['participant_id'] = participant.id
+        place = participant.place
+
+    event_text = event.show()
+    details_text = ''
+    show_participants = False
+    if participant:
+        event_text += ' ' + participant.place.show()
+        show_participants = False
+        if participant.canceled:
+            status = '%s Вы отменили свою заявку' % participant.emoji_status()
+        elif participant.declined:
+            status = '%s Вашу заявку отклонили' % participant.emoji_status()
+        elif participant.approved:
+            status = '%s Ваше участие одобрили.' % participant.emoji_status()
+            if participant.place.post_apply_text:
+                status = '%s\n%s' % (status, participant.place.post_apply_text)
+            else:
+                show_participants = True
+        else:
+            status = '%s Вы подали заявку на участие.' % participant.emoji_status()
+            if participant.place.post_apply_text:
+                status = '%s\n%s' % (status, participant.place.post_apply_text)
+            else:
+                if not is_event_admin:
+                    participants_count = models.AgitationEventParticipant.get_count(participant.event_id,
+                                                                                    participant.place_id)
+                    status = '%s\nЗаписались %d%s' % (status, participants_count, EMOJI_HUMAN)
+        details_text = status
+
+    if show_participants or is_event_admin:
+        if event.need_cube:
+            if event.cube_usage:
+                cube_usage_text = event.cube_usage.show(private=is_event_admin)
+            else:
+                cube_usage_text = '_нет информации о доставке_'
+            details_text += cube_usage_text + '\n' + details_text
+
+        participants = models.AgitationEventParticipant.objects.filter(event_id=event.id)
+        if participant:
+            participants = participants.filter(place_id=participant.place_id)
+
+        canceled_count = 0
+        declined_count = 0
+        ok_count = 0
+        participant_texts = list()
+        for i, p in enumerate(participants):
+            if p.canceled:
+                canceled_count += 1
+            elif p.declined:
+                declined_count += 1
+            else:
+                ok_count += 1
                 if p.agitator_id == p.event.master_id:
                     text = EMOJI_CROWN + ' ' + p.agitator.show(private=True)
                 else:
-                    text = p.agitator.show(private=(user.id == p.event.master_id))
-                participant_texts.append('%d. %s %s' % (i + 1, p.emoji_status(), text))
-            if participant.event.need_cube:
-                if participant.event.cube_usage:
-                    cube_usage_text = participant.event.cube_usage.show(private=(user.id == participant.event.master_id))
-                else:
-                    cube_usage_text = '_нет информации о доставке_'
-                status = cube_usage_text + '\n' + status
-            status = status + '\n' + '\n'.join(participant_texts)
-    else:
-        status = '%s Вы подали заявку на участие' % participant.emoji_status()
-        if participant.place.post_apply_text:
-            status = '%s\n%s' % (status, participant.place.post_apply_text)
-        else:
-            participants_count = models.AgitationEventParticipant.get_count(participant.event_id, participant.place_id)
-            status = '%s\nЗаписались %d%s' % (status, participants_count, EMOJI_HUMAN)
+                    text = p.agitator.show(private=is_event_admin)
+                if p.place_id != place.id:
+                    text += ' - %s' % p.place.show()
+                participant_texts.append('%d. %s %s' % (ok_count, p.emoji_status(), text))
+        details_text += ' Записались %d%s' % (ok_count, EMOJI_HUMAN)
+        if canceled_count:
+            details_text += '\n%d отменили заявку' % canceled_count
+        if declined_count:
+            details_text += '\n%d отклоненных заявок' % declined_count
+        details_text += '\n' + '\n'.join(participant_texts)
     keyboard = list()
-    if participant.canceled:
-        keyboard.append([InlineKeyboardButton('Восстановить заявку', callback_data=RESTORE)])
-    else:
-        keyboard.append([InlineKeyboardButton('Отказаться от участия', callback_data=CANCEL)])
-    keyboard.append([InlineKeyboardButton('Назад', callback_data=BACK)])
+    if is_event_admin:
+        keyboard.append([InlineKeyboardButton('Управление заявками', callback_data=MANAGE_EVENT_PARTICIPANTS)])
+        if not event.is_canceled and models.AdminRights.has_admin_rights(user_telegram_id, region_id):
+            if event.need_cube:
+                keyboard.append([InlineKeyboardButton('Логистика', callback_data=SET_CUBE_USAGE)])
+            keyboard.append([InlineKeyboardButton('Отменить мероприятие', callback_data=CANCEL_EVENT)])
+    if participant:
+        if participant.canceled:
+            keyboard.append([InlineKeyboardButton('Восстановить заявку', callback_data=RESTORE)])
+        else:
+            keyboard.append([InlineKeyboardButton('Отказаться от участия', callback_data=CANCEL)])
+    keyboard.append([InlineKeyboardButton('<< Назад', callback_data=BACK)])
     send_message_text(bot, update, user_data,
-                      '%s\n%s' % (event_text, status),
-                      location=participant.place.get_location(),
+                      '%s\n%s' % (event_text, details_text),
+                      location=place.get_location(),
                       parse_mode="Markdown",
                       reply_markup=InlineKeyboardMarkup(keyboard))
 
 
-def show_single_participation_button(bot, update, user_data):
+def show_event_participants_button(bot, update, user_data):
     query = update.callback_query
-    participant_id = user_data['participant_id']
-    if query.data == BACK:
+    if query.data in [SET_CUBE_USAGE, CANCEL_EVENT, MANAGE_EVENT_PARTICIPANTS]:
         query.answer()
-        del user_data['participant_id']
-        return SHOW_PARTICIPATIONS
+        return query.data
+    elif query.data == BACK:
+        query.answer()
+        return _back_from_show_event_participants(user_data)
     elif query.data == CANCEL:
+        participant_id = user_data['participant_id']
         query.answer('Заявка отменена')
         models.AgitationEventParticipant.cancel(participant_id)
         notifications.notify_about_cancellation_participation(bot, participant_id)
         return
     elif query.data == RESTORE:
+        participant_id = user_data['participant_id']
         query.answer('Заявка восстановлена')
         models.AgitationEventParticipant.restore(participant_id)
         notifications.notify_about_restoration_participation(bot, participant_id)
@@ -806,47 +863,59 @@ def select_cube_storage_button(bot, update, user_data, region_id):
             return MANAGE_CUBES
 
 
+def manage_event_participants(bot, update, user_data):
+    event = models.AgitationEvent.objects.filter(
+            id=user_data['event_id']
+        ).select_related('place__region', 'cubeusageinevent').first()
+    telegram_user_id = update.effective_user.id
+    if not event or not models.AdminRights.has_admin_rights_for_event(telegram_user_id, event):
+        return SHOW_EVENT_PARTICIPANTS
+
+    participants = models.AgitationEventParticipant.get_all(user_data['event_id'])
+    keyboard = list()
+    if participants:
+        lines = list()
+        for p in participants:
+            line = p.emoji_status() + ' ' + p.agitator.show(private=True)
+            if p.place_id != event.place_id:
+                line += ' ' + p.place.show()
+            lines.append(line)
+            keyboard.append([InlineKeyboardButton(EMOJI_OK + " " + p.agitator.full_name, callback_data=YES + str(p.id)),
+                             InlineKeyboardButton(EMOJI_NO + " " + p.agitator.full_name, callback_data=NO + str(p.id))])
+        text = '\n'.join(lines)
+    else:
+        text = "Никто не записался на это мероприятие :("
+    keyboard.append([InlineKeyboardButton('<< Назад', callback_data=BACK)])
+
+    text = event.show() + ' ' + event.place.show() + '\n\n' + text
+
+    send_message_text(bot, update, user_data,
+                      text,
+                      location=event.place.get_location(),
+                      parse_mode="Markdown",
+                      reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+def manage_event_participants_button(bot, update, user_data):
+    query = update.callback_query
+    query.answer()
+    if query.data == BACK:
+        return SHOW_EVENT_PARTICIPANTS
+    else:
+        match = re.match('^(%s|%s)(\d+)$' % (YES, NO), query.data)
+        if bool(match):
+            participant_id = int(match.group(2))
+            participant = models.AgitationEventParticipant.objects.filter(id=participant_id).first()
+            if participant and participant.event_id == user_data['event_id']:
+                if match.group(1) == YES:
+                    models.AgitationEventParticipant.approve(participant_id)
+                elif match.group(1) == NO:
+                    models.AgitationEventParticipant.decline(participant_id)
+
+
 @region_decorator
 @has_admin_rights
 def manage_events(bot, update, user_data, region_id):
-    if 'event_id' in user_data:
-        event = models.AgitationEvent.objects.filter(id=user_data['event_id']).select_related('place__region', 'cubeusageinevent').first()
-        if event:
-            cube_usage = event.cube_usage
-            applications = list(models.AgitationEventParticipant.objects.filter(event_id=user_data['event_id']).all())
-            keyboard = list()
-            if applications:
-                lines = list()
-                for a in applications:
-                    line = a.emoji_status() + " " + a.place.show() + " " + a.agitator.show(private=True)
-                    lines.append(line)
-                    keyboard.append([InlineKeyboardButton(EMOJI_OK + " " + a.agitator.full_name, callback_data=YES + str(a.id)),
-                                     InlineKeyboardButton(EMOJI_NO + " " + a.agitator.full_name, callback_data=NO + str(a.id))])
-                text = '\n'.join(lines)
-            else:
-                text = "Никто не записался на это мероприятие :("
-            if not event.is_canceled:
-                if event.need_cube:
-                    keyboard.append([InlineKeyboardButton('Логистика', callback_data=SET_CUBE_USAGE)])
-                keyboard.append([InlineKeyboardButton('Отменить мероприятие', callback_data=CANCEL_EVENT)])
-            keyboard.append([InlineKeyboardButton('<< Назад', callback_data=BACK)])
-
-            if event.need_cube:
-                if cube_usage:
-                    text = cube_usage.show(private=True) + '\n\n' + text
-                else:
-                    text = '_нет информации о доставке_' + '\n\n' + text
-            text = event.show() + '\n\n' + text
-
-            send_message_text(bot, update, user_data,
-                              text,
-                              location=event.place.get_location(),
-                              parse_mode="Markdown",
-                              reply_markup=InlineKeyboardMarkup(keyboard))
-            return
-        else:
-            del user_data['event_id']
-
     if 'events_offset' not in user_data:
         user_data['events_offset'] = 0
 
@@ -857,7 +926,15 @@ def manage_events(bot, update, user_data, region_id):
     events = list(query_set.select_related('place')[offset:offset + EVENT_PAGE_SIZE])
     keyboard = list()
     for event in events:
-        keyboard.append([InlineKeyboardButton('%s %s' % (event.show(markdown=False), event.place.show(markdown=False)),
+        participants = list([p for p in models.AgitationEventParticipant.get_all(event.id) if not p.canceled ])
+        ok_count = len([1 for p in participants if p.approved])
+        quest_count = len([1 for p in participants if not p.approved and not p.declined])
+        count_str = ''
+        if ok_count:
+            count_str += '%d%s ' % (ok_count, EMOJI_OK)
+        if quest_count:
+            count_str += '%d%s ' % (quest_count, EMOJI_QUESTION)
+        keyboard.append([InlineKeyboardButton('%s%s %s' % (count_str, event.show(markdown=False), event.place.show(markdown=False)),
                                               callback_data=str(event.id))])
     keyboard.extend(_build_paging_buttons(offset, query_set.count(), EVENT_PAGE_SIZE))
     keyboard.append([InlineKeyboardButton('<< Меню', callback_data=MENU)])
@@ -871,13 +948,8 @@ def manage_events(bot, update, user_data, region_id):
 def manage_events_button(bot, update, user_data):
     query = update.callback_query
     query.answer()
-    if query.data == CANCEL_EVENT:
-        return CANCEL_EVENT
     if query.data == BACK:
-        if 'event_id' in user_data:
-            del user_data['event_id']
-        else:
-            user_data['events_offset'] -= EVENT_PAGE_SIZE
+        user_data['events_offset'] -= EVENT_PAGE_SIZE
     elif query.data == FORWARD:
         user_data['events_offset'] += EVENT_PAGE_SIZE
     elif query.data in [MENU, SET_CUBE_USAGE]:
@@ -886,14 +958,8 @@ def manage_events_button(bot, update, user_data):
         match = re.match('^\d+$', query.data)
         if bool(match):
             user_data['event_id'] = int(query.data)
-        else:
-            match = re.match('^(%s|%s)(\d+)$' % (YES, NO), query.data)
-            if bool(match):
-                participant_id = int(match.group(2))
-                if match.group(1) == YES:
-                    models.AgitationEventParticipant.approve(participant_id)
-                elif match.group(1) == NO:
-                    models.AgitationEventParticipant.decline(participant_id)
+            user_data['back_state'] = MANAGE_EVENTS
+            return SHOW_EVENT_PARTICIPANTS
 
 
 @region_decorator
@@ -924,9 +990,9 @@ def cancel_event_button(bot, update, user_data):
     if query.data == YES:
         event.is_canceled = True
         event.save()
-        return MANAGE_EVENTS
+        return SHOW_EVENT_PARTICIPANTS
     elif query.data == NO:
-        return MANAGE_EVENTS
+        return SHOW_EVENT_PARTICIPANTS
 
 
 def _build_paging_buttons(offset, count, page_size):
@@ -1079,8 +1145,8 @@ def apply_to_agitate_place_button(bot, update, user_data):
         del user_data['event_id']
         del user_data['place_ids']
         query.answer('Вы записаны')
-        user_data['participant_id'] = participant.id
-        return SHOW_SINGLE_PARTICIPATION
+        user_data['event_id'] = event_id
+        return SHOW_EVENT_PARTICIPANTS
     else:
         match = re.match('^\d+$', query.data)
         if bool(match):
@@ -1450,13 +1516,10 @@ def force_button_query_handler(bot, update, user_data):
 def show_event_for_master(bot, update, user_data, groups):
     query = update.callback_query
     event_id = int(groups[0])
-    participant = models.AgitationEventParticipant.get(update.effective_user.id, event_id)
-    if participant:
-        query.answer()
-        utils.safe_delete_message(bot, update.effective_chat.id, update.effective_message.message_id)
-        user_data['participant_id'] = participant.id
-        return SHOW_SINGLE_PARTICIPATION
-    query.answer('Что-то пошло не так')
+    query.answer()
+    utils.safe_delete_message(bot, update.effective_chat.id, update.effective_message.message_id)
+    user_data['event_id'] = event_id
+    return SHOW_EVENT_PARTICIPANTS
 
 
 def transfer_cube_to_event(bot, update, user_data, groups):
@@ -1528,8 +1591,10 @@ def run_bot():
                                standard_callback_query_handler],
             SHOW_PARTICIPATIONS: [EmptyHandler(show_participations, pass_user_data=True),
                                   CallbackQueryHandler(show_participations_button, pass_user_data=True)],
-            SHOW_SINGLE_PARTICIPATION: [EmptyHandler(show_single_participation, pass_user_data=True),
-                                        CallbackQueryHandler(show_single_participation_button, pass_user_data=True)],
+            SHOW_EVENT_PARTICIPANTS: [EmptyHandler(show_event_participants, pass_user_data=True),
+                                      CallbackQueryHandler(show_event_participants_button, pass_user_data=True)],
+            MANAGE_EVENT_PARTICIPANTS: [EmptyHandler(manage_event_participants, pass_user_data=True),
+                                        CallbackQueryHandler(manage_event_participants_button, pass_user_data=True)],
             MANAGE_CUBES: [EmptyHandler(manage_cubes, pass_user_data=True),
                            CallbackQueryHandler(manage_cubes_button, pass_user_data=True)],
             CREATE_NEW_CUBE: [EmptyHandler(create_new_cube, pass_user_data=True),
