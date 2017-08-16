@@ -63,10 +63,11 @@ def register_handlers(dispatcher):
 
 def notify_about_new_registration(bot, region_id, user, text):
     region = models.Region.get_by_id(region_id)
-    bot.send_message(region.registrations_chat_id,
-                     'Новая анкета\nРегион %s\n%s%s'
-                     % (region.show(), user.show(private=True), text),
-                     parse_mode="Markdown")
+    if region.registrations_chat_id:
+        bot.send_message(region.registrations_chat_id,
+                         'Новая анкета\nРегион %s\n%s%s'
+                         % (region.show(), user.show(private=True), text),
+                         parse_mode="Markdown")
 
 
 def _notify_about_participant(bot, participant_id, text):
@@ -81,7 +82,9 @@ def _notify_about_participant(bot, participant_id, text):
     region = event.place.region
     keyboard = [[InlineKeyboardButton('Подтвердить', callback_data=PARTICIPANT_CONFIRM + str(participant.id))],
                 [InlineKeyboardButton('Отклонить', callback_data=PARTICIPANT_DECLINE + str(participant.id))]]
-    chat_ids = [region.registrations_chat_id]
+    chat_ids = []
+    if region.registrations_chat_id:
+        chat_ids.append(region.registrations_chat_id)
     if event.place.registrations_chat_id:
         chat_ids = [event.place.registrations_chat_id]
         if place.registrations_chat_id:

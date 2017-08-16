@@ -12,8 +12,8 @@ from datetime import timedelta
 
 
 class Region(models.Model):
-    name = models.CharField(max_length=100, blank=True, null=True, unique=True)
-    registrations_chat_id = models.BigIntegerField()
+    name = models.CharField(max_length=100, unique=True)
+    registrations_chat_id = models.BigIntegerField(null=True, blank=True)
 
     timezone_delta = models.IntegerField(help_text='Разница с UTC в секундах, например, для UTC+3 указано +10800')
 

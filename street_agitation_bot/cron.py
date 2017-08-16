@@ -94,6 +94,8 @@ class DeliveryCubeToEventTask(AbstractTask):
         if not event or event.is_canceled:
             return
         region = event.place.region
+        if not region.registrations_chat_id:
+            return
         if self._prev_message_id:
             utils.safe_delete_message(self._bot, region.registrations_chat_id, self._prev_message_id)
         cube_usage = event.cube_usage
@@ -126,6 +128,8 @@ class ShipCubeFromEventTask(AbstractTask):
         if not event or event.is_canceled:
             return
         region = event.place.region
+        if not region.registrations_chat_id:
+            return
         if self._prev_message_id:
             utils.safe_delete_message(self._bot, region.registrations_chat_id, self._prev_message_id)
         cube_usage = event.cube_usage
