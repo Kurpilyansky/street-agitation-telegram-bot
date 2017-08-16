@@ -36,13 +36,14 @@ def participant_button(bot, update, groups):
 
     participant_id = groups[1]
     participant = (models.AgitationEventParticipant.objects.filter(id=participant_id)
-                   .select_related('agitator', 'event', 'event__place', 'event__place__region').first())
+                   .select_related('agitator', 'event', 'event__place').first())
     if not participant:
         query.answer(text='Данная заявка не найдена. Что-то пошло не так :(', show_alert=True)
         return
-    # if not models.AdminRights.has_admin_rights(user_telegram_id, region_id):
-    #    query.answer(text='У вас нет прав на это действие', show_alert=True)
-    #    return
+    user_telegram_id = update.effective_user.id
+    if not models.AdminRights.has_admin_rights_for_event(user_telegram_id, participant.event):
+        query.answer(text='У вас нет прав на это действие', show_alert=True)
+        return
 
     query.answer()
     if groups[0] == PARTICIPANT_CONFIRM:

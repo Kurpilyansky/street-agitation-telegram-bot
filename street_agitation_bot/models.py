@@ -130,6 +130,11 @@ class AdminRights(models.Model):
                                .filter(Q(region=None) | Q(region_id=region_id))
                                .first())
 
+    @classmethod
+    def has_admin_rights_for_event(cls, user_telegram_id, event):
+        return event.master.telegram_id == user_telegram_id \
+               or cls.has_admin_rights(user_telegram_id, event.place.region_id)
+
     class Meta:
         unique_together = ('user', 'region')
 

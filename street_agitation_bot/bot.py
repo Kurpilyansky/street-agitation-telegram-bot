@@ -31,6 +31,19 @@ def region_decorator(func):
     return wrapper
 
 
+def has_admin_rights(func):
+    def wrapper(bot, update, user_data, *args, **kwargs):
+        if 'region_id' not in user_data:
+            return change_region(bot, update, user_data)
+        region_id = user_data['region_id']
+        user_telegram_id = update.effective_user.id
+        if not models.AdminRights.has_admin_rights(user_telegram_id, region_id):
+            return cancel(bot, update, user_data)
+        return func(bot, update, user_data, *args, **kwargs)
+
+    return wrapper
+
+
 def send_message_text(bot, update, user_data, *args, **kwargs):
     last_bot_message_ids = user_data.get('last_bot_message_id', None)
     if not last_bot_message_ids:
@@ -305,17 +318,20 @@ def show_menu(bot, update, user_data):
     send_message_text(bot, update, user_data, '*Меню*\nВыберите действие для продолжения работы', parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
 
 
+@has_admin_rights
 def make_broadcast_start(bot, update, user_data):
     send_message_text(bot, update, user_data,
                       '*Отправьте сообщение, и оно будет отправлено всем пользователям*',
                       parse_mode='Markdown')
 
 
+@has_admin_rights
 def make_broadcast(bot, update, user_data):
     user_data['broadcast_text'] = update.message.text
     return MAKE_BROADCAST_CONFIRM
 
 
+@has_admin_rights
 def make_broadcast_confirm(bot, update, user_data):
     broadcast_text = user_data['broadcast_text']
     text = 'Вы уверены, что хотите отправить *всем пользователям вашего региона* следующее сообщение:\n\n%s' % broadcast_text
@@ -327,6 +343,7 @@ def make_broadcast_confirm(bot, update, user_data):
 
 
 @region_decorator
+@has_admin_rights
 def make_broadcast_confirm_button(bot, update, user_data, region_id):
     if 'broadcast_text' not in user_data:
         return MENU
@@ -498,14 +515,12 @@ def show_single_participation_button(bot, update, user_data):
 EVENT_PAGE_SIZE = 10
 
 
+@has_admin_rights
 def set_cube_usage_start(bot, update, user_data):
-    user_telegram_id = update.effective_user.id
     event_id = user_data['event_id']
     event = models.AgitationEvent.objects.filter(id=event_id).select_related('place', 'cubeusageinevent').first()
     if not event or not event.need_cube:
         return MANAGE_EVENTS
-    if not models.AdminRights.has_admin_rights(user_telegram_id, event.place.region_id):
-        return MENU
     keyboard = [[InlineKeyboardButton('<< Назад', callback_data=MANAGE_EVENTS)]]
     if event.cube_usage:
         if 'field_name' in user_data:
@@ -573,6 +588,7 @@ def set_cube_usage_start(bot, update, user_data):
                           parse_mode='Markdown')
 
 
+@has_admin_rights
 def set_cube_usage_message(bot, update, user_data):
     if 'field_name' in user_data:
         user = _extract_mentioned_user(update.message)
@@ -593,6 +609,7 @@ def set_cube_usage_message(bot, update, user_data):
             del user_data['field_name']
 
 
+@has_admin_rights
 def set_cube_usage_button(bot, update, user_data):
     query = update.callback_query
     query.answer()
@@ -634,10 +651,8 @@ def set_cube_usage_button(bot, update, user_data):
 
 
 @region_decorator
+@has_admin_rights
 def manage_cubes(bot, update, user_data, region_id):
-    user_telegram_id = update.effective_user.id
-    if not models.AdminRights.has_admin_rights(user_telegram_id, region_id):
-        return MENU
     if 'cube_id' in user_data:
         cube = models.Cube.objects.filter(id=user_data['cube_id']).first()
         if not cube:
@@ -660,6 +675,7 @@ def manage_cubes(bot, update, user_data, region_id):
                       reply_markup=InlineKeyboardMarkup(keyboard))
 
 
+@has_admin_rights
 def manage_cubes_button(bot, update, user_data):
     query = update.callback_query
     query.answer()
@@ -675,10 +691,8 @@ def manage_cubes_button(bot, update, user_data):
 
 
 @region_decorator
+@has_admin_rights
 def create_new_cube(bot, update, user_data, region_id):
-    user_telegram_id = update.effective_user.id
-    if not models.AdminRights.has_admin_rights(user_telegram_id, region_id):
-        return MENU
     keyboard = [[InlineKeyboardButton('Выбрать место из старых', callback_data=SELECT_CUBE_STORAGE)],
                 [InlineKeyboardButton('Создать новое место', callback_data=CREATE_CUBE_STORAGE)],
                 [InlineKeyboardButton('<< Назад', callback_data=MANAGE_CUBES)]]
@@ -688,6 +702,7 @@ def create_new_cube(bot, update, user_data, region_id):
 
 
 @region_decorator
+@has_admin_rights
 def select_cube_storage(bot, update, user_data, region_id):
     storages = list(models.Storage.objects.filter(region_id=region_id))
     keyboard = [[InlineKeyboardButton(storage.show(private=True, markdown=False),
@@ -699,6 +714,7 @@ def select_cube_storage(bot, update, user_data, region_id):
                       reply_markup=InlineKeyboardMarkup(keyboard))
 
 
+@has_admin_rights
 def create_cube_storage(bot, update, user_data):
     if 'storage_params' not in user_data:
         user_data['storage_params'] = dict()
@@ -743,6 +759,7 @@ def _create_cube_storage(bot, update, user_data, region_id):
     return MANAGE_CUBES
 
 
+@has_admin_rights
 def create_cube_storage_message(bot, update, user_data):
     params = user_data['storage_params']
     message = update.message
@@ -765,6 +782,7 @@ def create_cube_storage_message(bot, update, user_data):
             return _create_cube_storage(bot, update, user_data)
 
 
+@has_admin_rights
 def create_cube_storage_button(bot, update, user_data):
     params = user_data['storage_params']
     query = update.callback_query
@@ -774,6 +792,7 @@ def create_cube_storage_button(bot, update, user_data):
 
 
 @region_decorator
+@has_admin_rights
 def select_cube_storage_button(bot, update, user_data, region_id):
     query = update.callback_query
     query.answer()
@@ -788,11 +807,8 @@ def select_cube_storage_button(bot, update, user_data, region_id):
 
 
 @region_decorator
+@has_admin_rights
 def manage_events(bot, update, user_data, region_id):
-    user_telegram_id = update.effective_user.id
-    if not models.AdminRights.has_admin_rights(user_telegram_id, region_id):
-        return MENU
-
     if 'event_id' in user_data:
         event = models.AgitationEvent.objects.filter(id=user_data['event_id']).select_related('place__region', 'cubeusageinevent').first()
         if event:
@@ -851,6 +867,7 @@ def manage_events(bot, update, user_data, region_id):
                       reply_markup=InlineKeyboardMarkup(keyboard))
 
 
+@has_admin_rights
 def manage_events_button(bot, update, user_data):
     query = update.callback_query
     query.answer()
@@ -880,10 +897,8 @@ def manage_events_button(bot, update, user_data):
 
 
 @region_decorator
+@has_admin_rights
 def cancel_event(bot, update, user_data, region_id):
-    user_telegram_id = update.effective_user.id
-    if not models.AdminRights.has_admin_rights(user_telegram_id, region_id):
-        return MENU
     if 'event_id' not in user_data:
         return MENU
     event = models.AgitationEvent.objects.filter(id=user_data['event_id']).select_related('place__region').first()
@@ -901,6 +916,7 @@ def cancel_event(bot, update, user_data, region_id):
                       reply_markup=InlineKeyboardMarkup(keyboard))
 
 
+@has_admin_rights
 def cancel_event_button(bot, update, user_data):
     query = update.callback_query
     query.answer()
@@ -1079,6 +1095,7 @@ def apply_to_agitate_place_button(bot, update, user_data):
     query.answer()
 
 
+@has_admin_rights
 def set_event_name(bot, update, user_data):
     keyboard = [[InlineKeyboardButton('Куб', callback_data='Куб'),
                  InlineKeyboardButton('Автокуб', callback_data='Автокуб')],
@@ -1090,6 +1107,7 @@ def set_event_name(bot, update, user_data):
                       reply_markup=InlineKeyboardMarkup(keyboard))
 
 
+@has_admin_rights
 def set_event_name_button(bot, update, user_data):
     query = update.callback_query
     query.answer()
@@ -1101,11 +1119,13 @@ def set_event_name_button(bot, update, user_data):
     return SET_EVENT_MASTER
 
 
+@has_admin_rights
 def set_event_name_text(bot, update, user_data):
     user_data['event_name'] = update.message.text
     return SET_EVENT_MASTER
 
 
+@has_admin_rights
 def set_event_master_start(bot, update, user_data):
     send_message_text(bot, update, user_data, 'Укажите волонтера, ответственного за этот ивент')
 
@@ -1151,6 +1171,7 @@ def _extract_mentioned_user(message):
         return models.User.update_or_create(params)[0]
 
 
+@has_admin_rights
 def set_event_master_message(bot, update, user_data):
     user = _extract_mentioned_user(update.effective_message)
     if user:
@@ -1158,6 +1179,7 @@ def set_event_master_message(bot, update, user_data):
         return SET_EVENT_PLACE
 
 
+@has_admin_rights
 def set_event_place(bot, update, user_data):
     if 'place_id' in user_data:
         del user_data['place_id']
@@ -1173,6 +1195,7 @@ PLACE_PAGE_SIZE = 10
 
 
 @region_decorator
+@has_admin_rights
 def select_event_place(bot, update, user_data, region_id):
     if "place_offset" not in user_data:
         user_data["place_offset"] = 0
@@ -1188,6 +1211,7 @@ def select_event_place(bot, update, user_data, region_id):
     send_message_text(bot, update, user_data, "Выберите место", reply_markup=InlineKeyboardMarkup(keyboard))
 
 
+@has_admin_rights
 def select_event_place_button(bot, update, user_data):
     query = update.callback_query
     query.answer()
@@ -1203,21 +1227,25 @@ def select_event_place_button(bot, update, user_data):
             return SELECT_DATES
 
 
+@has_admin_rights
 def set_place_address_start(bot, update, user_data):
     keyboard = [[InlineKeyboardButton("Назад", callback_data=SET_EVENT_PLACE)]]
     send_message_text(bot, update, user_data, 'Введите адрес', reply_markup=InlineKeyboardMarkup(keyboard))
 
 
+@has_admin_rights
 def set_place_address(bot, update, user_data):
     user_data['address'] = update.message.text
     return SET_PLACE_LOCATION
 
 
+@has_admin_rights
 def set_place_location_start(bot, update, user_data):
     keyboard = [[InlineKeyboardButton("Не указывать", callback_data=SKIP)]]
     send_message_text(bot, update, user_data, 'Отправь геопозицию', reply_markup=InlineKeyboardMarkup(keyboard))
 
 
+@has_admin_rights
 def set_place_location(bot, update, user_data):
     location = update.message.location
     user_data['location'] = {
@@ -1227,6 +1255,7 @@ def set_place_location(bot, update, user_data):
     return SELECT_DATES
 
 
+@has_admin_rights
 def skip_place_location(bot, update, user_data):
     query = update.callback_query
     query.answer()
@@ -1247,6 +1276,7 @@ def _build_dates_keyboard(user_data):
     return InlineKeyboardMarkup(keyboard)
 
 
+@has_admin_rights
 def select_event_dates(bot, update, user_data):
     if 'dates_dict' not in user_data:
         today = date.today()
@@ -1260,6 +1290,7 @@ def select_event_dates(bot, update, user_data):
     send_message_text(bot, update, user_data, 'Выберите дату', reply_markup=_build_dates_keyboard(user_data))
 
 
+@has_admin_rights
 def select_event_dates_button(bot, update, user_data):
     query = update.callback_query
     query.answer()
@@ -1272,6 +1303,7 @@ def select_event_dates_button(bot, update, user_data):
         dates_dict[query.data]['selected'] ^= True
 
 
+@has_admin_rights
 def set_event_time_start(bot, update, user_data):
     keyboard = list()
     for c in ['16:00-19:00', '17:00-20:00']:
@@ -1281,6 +1313,7 @@ def set_event_time_start(bot, update, user_data):
                       reply_markup=InlineKeyboardMarkup(keyboard))
 
 
+@has_admin_rights
 def set_event_time(bot, update, user_data):
     if update.message:
         text = update.message.text
@@ -1319,6 +1352,7 @@ def _create_events(user_data):
 
 
 @region_decorator
+@has_admin_rights
 def create_event_series_confirm(bot, update, user_data, region_id):
     if 'place_id' in user_data:
         place = models.AgitationPlace.objects.select_related('region').get(id=user_data['place_id'])
@@ -1350,6 +1384,7 @@ def create_event_series_confirm(bot, update, user_data, region_id):
                       reply_markup=InlineKeyboardMarkup(keyboard))
 
 
+@has_admin_rights
 def create_event_series_confirm_button(bot, update, user_data):
     query = update.callback_query
     query.answer()
@@ -1364,6 +1399,7 @@ def create_event_series_confirm_button(bot, update, user_data):
         return MENU
 
 
+@has_admin_rights
 def create_event_series(bot, update, user_data):
     events = _create_events(user_data)
     for e in events:
