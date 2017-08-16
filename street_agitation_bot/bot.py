@@ -497,7 +497,7 @@ def show_event_participants(bot, update, user_data, region_id):
                 cube_usage_text = event.cube_usage.show(private=is_event_admin)
             else:
                 cube_usage_text = '_нет информации о доставке_'
-            details_text += cube_usage_text + '\n' + details_text
+            details_text = cube_usage_text + '\n' + details_text
 
         participants = models.AgitationEventParticipant.objects.filter(event_id=event.id)
         if participant:
