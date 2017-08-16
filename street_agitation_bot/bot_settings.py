@@ -1,6 +1,8 @@
 
 BOT_TOKEN = "BOT_TOKEN"
 
+BOT_USERNAME = 'Bot'
+
 admin_telegram_user_ids = [12211357]
 
 
