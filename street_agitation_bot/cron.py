@@ -26,11 +26,17 @@ class PriorityQueue:
     def pop(self):
         return heapq.heappop(self._heap)
 
+    def clear(self):
+        self._heap = []
+
 
 class CronTab:
     def __init__(self, bot):
         self.bot = bot
         self.queue = PriorityQueue()
+
+    def clear(self):
+        self.queue.clear()
 
     def add_task(self, task):
         self.queue.push(task)
@@ -188,10 +194,7 @@ def _cron_cycle(cron_tab):
 cron_tab = None
 
 
-def init_all(updater):
-    bot = updater.dispatcher.bot
-    global cron_tab
-    cron_tab = CronTab(bot)
+def _create_cron_tasks(bot):
     query_set = models.AgitationEvent.objects \
         .filter(need_cube=True, is_canceled=False) \
         .filter(Q(cubeusageinevent=None)
@@ -204,6 +207,18 @@ def init_all(updater):
         cron_tab.add_task(DeliveryCubeToEventTask(event, bot=bot, cron_tab=cron_tab))
         cron_tab.add_task(ShipCubeFromEventTask(event, bot=bot, cron_tab=cron_tab))
         cron_tab.add_task(MakeTransferCubeTask(event, bot=bot, cron_tab=cron_tab))
+
+
+def restart_cron(bot):
+    cron_tab.clear()
+    _create_cron_tasks(bot)
+
+
+def init_all(updater):
+    bot = updater.dispatcher.bot
+    global cron_tab
+    cron_tab = CronTab(bot)
+    _create_cron_tasks(bot)
 
     updater._init_thread(lambda: _cron_cycle(cron_tab), "cron")  # TODO hack
 

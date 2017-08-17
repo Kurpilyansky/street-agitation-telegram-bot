@@ -1,4 +1,4 @@
-from street_agitation_bot import bot_settings, models, notifications, utils, cron
+from street_agitation_bot import bot_settings, models, notifications, utils, cron, admin_commands
 from street_agitation_bot.emoji import *
 
 import traceback
@@ -1534,22 +1534,6 @@ def help(bot, update):
     update.message.reply_text('Help!', reply_markup=ReplyKeyboardRemove())
 
 
-def set_region_chat_command(bot, update, args):
-    telegram_user_id = update.effective_user.id
-    chat_id = update.effective_chat.id
-    if bot_settings.is_admin_user_id(telegram_user_id):
-        region_name = ' '.join(args[1:])
-        region = models.Region.find_by_name(region_name, telegram_user_id)
-        if not region:
-            bot.send_message(chat_id, "Регион '%s' не найден" % region_name)
-        elif args[0] == '0':
-            region.registrations_chat_id = chat_id
-            region.save()
-            bot.send_message(chat_id, "Привязан новый чат 'Регистрации' в регионе '%s'" % region_name)
-        else:
-            bot.send_message(chat_id, "Неизвестный номер чата (первый аргумент должен быть 0)")
-
-    
 def send_bug_report(bot, update, user_data):
     state = models.ConversationState.objects.filter(key=update.effective_user.id).first()
     bot.send_message(bot_settings.bug_reports_chat_id, '%s\n\n%s' % (update, repr(state)))
@@ -1573,7 +1557,8 @@ def run_bot():
 
     # dp.add_handler(CommandHandler("start", start))
     dp.add_handler(CommandHandler("help", help))
-    dp.add_handler(CommandHandler("set_region_chat", set_region_chat_command, pass_args=True))
+    admin_commands.register_handlers(dp)
+    notifications.register_handlers(dp)
 
     standard_callback_query_handler = CallbackQueryHandler(standard_callback)
 
@@ -1674,8 +1659,6 @@ def run_bot():
     )
 
     # dp.add_handler(InlineQueryHandler(select_event_place, pass_user_data=True))
-
-    notifications.register_handlers(dp)
 
     dp.add_handler(conv_handler)
 
