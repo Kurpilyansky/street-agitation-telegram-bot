@@ -114,7 +114,7 @@ class DeliveryCubeToEventTask(AbstractTask):
 
 class ShipCubeFromEventTask(AbstractTask):
     def __init__(self, event, **kwargs):
-        super().__init__(event.start_date - timedelta(hours=3, minutes=20),
+        super().__init__(event.end_date - timedelta(hours=4, minutes=20),
                          timedelta(hours=1),
                          **kwargs)
         self._event_id = event.id
