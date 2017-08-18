@@ -23,7 +23,7 @@ def set_region_chat_command(bot, update, args):
             bot.send_message(chat_id, "Неизвестный номер чата (первый аргумент должен быть 0)")
 
 
-def restart_cron(bot, update):
+def restart_cron_command(bot, update):
     telegram_user_id = update.effective_user.id
     if bot_settings.is_admin_user_id(telegram_user_id):
         cron.restart_cron(bot)
@@ -31,4 +31,4 @@ def restart_cron(bot, update):
 
 def register_handlers(dispatcher):
     dispatcher.add_handler(CommandHandler("set_region_chat", set_region_chat_command, pass_args=True))
-    dispatcher.add_handler(CommandHandler("restart_cron", set_region_chat_command, pass_args=True))
+    dispatcher.add_handler(CommandHandler("restart_cron", restart_cron_command, pass_args=True))
