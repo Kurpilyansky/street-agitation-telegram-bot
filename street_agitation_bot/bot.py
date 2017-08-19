@@ -1056,12 +1056,14 @@ def apply_to_agitate(bot, update, user_data, region_id):
 
 def apply_to_agitate_button(bot, update, user_data):
     query = update.callback_query
-    query.answer()
     if query.data == BACK:
+        query.answer()
         user_data['events_offset'] -= EVENT_PAGE_SIZE
     elif query.data == FORWARD:
+        query.answer()
         user_data['events_offset'] += EVENT_PAGE_SIZE
     elif query.data in [MENU, SHOW_PARTICIPATIONS, CUBE_APPLICATION]:
+        query.answer()
         return query.data
     else:
         match = re.match('^\d+$', query.data)
@@ -1073,6 +1075,7 @@ def apply_to_agitate_button(bot, update, user_data):
                 if count == event.agitators_limit:
                     query.answer('Все места заняты, выберите другое место')
                     return
+            query.answer()
             user_data['event_id'] = event_id
             return APPLY_TO_AGITATE_PLACE
 
