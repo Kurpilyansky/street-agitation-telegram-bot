@@ -1067,6 +1067,12 @@ def apply_to_agitate_button(bot, update, user_data):
         match = re.match('^\d+$', query.data)
         if bool(match):
             event_id = int(query.data)
+            event = models.AgitationEvent.objects.filter(id=event_id).first()
+            if event.agitators_limit:
+                count = models.AgitationEventParticipant.get_count(event.id, event.place_id)
+                if count == event.agitators_limit:
+                    query.answer('Все места заняты, выберите другое место')
+                    return
             user_data['event_id'] = event_id
             return APPLY_TO_AGITATE_PLACE
 
