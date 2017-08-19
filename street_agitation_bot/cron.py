@@ -97,7 +97,7 @@ class DeliveryCubeToEventTask(AbstractTask):
 
     def process(self):
         event = models.AgitationEvent.objects.select_related('place__region', 'cubeusageinevent').filter(id=self._event_id).first()
-        if not event or event.is_canceled:
+        if not event or event.is_canceled or not event.need_cube:
             return
         region = event.place.region
         if not region.registrations_chat_id:
@@ -131,7 +131,7 @@ class ShipCubeFromEventTask(AbstractTask):
 
     def process(self):
         event = models.AgitationEvent.objects.select_related('place__region', 'cubeusageinevent').filter(id=self._event_id).first()
-        if not event or event.is_canceled:
+        if not event or event.is_canceled or not event.need_cube:
             return
         region = event.place.region
         if not region.registrations_chat_id:
@@ -167,7 +167,7 @@ class MakeTransferCubeTask(AbstractTask):
     def process(self):
         event = models.AgitationEvent.objects.filter(
             id=self._event_id).select_related('cubeusageinevent', 'cubeusageinevent__cube').first()
-        if not event or event.is_canceled:
+        if not event or event.is_canceled or not event.need_cube:
             return
         cube_usage = event.cube_usage
         if cube_usage and cube_usage.transferred_to_storage:
