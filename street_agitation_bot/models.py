@@ -89,7 +89,6 @@ class User(models.Model):
                     params['first_name'] = '?'
                 if not params.get('last_name', None):
                     params['last_name'] = '?'
-                print(params)
                 return cls.objects.create(**params), True
 
     def show(self, markdown=True, private=True):
@@ -125,10 +124,39 @@ class User(models.Model):
 class AdminRights(models.Model):
     user = models.ForeignKey(User)
     region = models.ForeignKey(Region, null=True, blank=True)
+    level = models.IntegerField(default=1)
 
     @classmethod
-    def has_admin_rights(cls, user_telegram_id, region_id):
-        return bool(cls.objects.filter(user__telegram_id=user_telegram_id)
+    def get_region_admins(cls, region_id):
+        users = dict()
+        admin_rights = cls.objects.select_related('user').filter(Q(region=None) | Q(region_id=region_id)).all()
+        for ar in admin_rights:
+            if ar.user in users:
+                users[ar.user] = max(ar.level, users[ar.user])
+            else:
+                users[ar.user] = ar.level
+        return users
+
+    @classmethod
+    def get_admin_rights_level(cls, user_telegram_id, region_id):
+        return (cls.objects.filter(user__telegram_id=user_telegram_id)
+                           .filter(Q(region=None) | Q(region_id=region_id))
+                           .aggregate(models.Max('level'))['level__max'])
+
+    @classmethod
+    def can_disrank(cls, user_telegram_id, region_id, level):
+        return list(set(map(lambda x: x.user,
+                            cls.objects.select_related('user')
+                               .filter(region_id=region_id, level__lt=level)
+                               .all())))
+
+    @classmethod
+    def disrank(cls, user_id, region_id, level):
+        cls.objects.filter(user_id=user_id, region_id=region_id, level__lt=level).delete()
+
+    @classmethod
+    def has_admin_rights(cls, user_telegram_id, region_id, level=1):
+        return bool(cls.objects.filter(user__telegram_id=user_telegram_id, level__gte=level)
                                .filter(Q(region=None) | Q(region_id=region_id))
                                .first())
 

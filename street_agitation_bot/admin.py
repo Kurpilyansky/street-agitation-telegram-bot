@@ -64,6 +64,7 @@ class AdminRightsAdmin(VersionAdmin):
     list_display = (
         'region',
         'user',
+        'level'
     )
 
     list_filter = (

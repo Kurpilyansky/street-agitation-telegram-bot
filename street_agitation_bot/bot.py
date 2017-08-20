@@ -321,6 +321,7 @@ def show_menu(bot, update, user_data):
             if region.settings.enabled_cube_logistics:
                 keyboard.append([InlineKeyboardButton('Логистика', callback_data=MANAGE_CUBES)])
             keyboard.append([InlineKeyboardButton('Сделать рассылку', callback_data=MAKE_BROADCAST)])
+            keyboard.append([InlineKeyboardButton('Настройки штаба', callback_data=SHOW_REGION_SETTINGS)])
     else:
         return SELECT_REGION
     send_message_text(bot, update, user_data, '*Меню*\nВыберите действие для продолжения работы', parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
@@ -616,7 +617,7 @@ def set_cube_usage_start(bot, update, user_data):
                 keyboard = [[InlineKeyboardButton(storage.show(private=True, markdown=False),
                                                   callback_data=str(storage.id))]
                             for storage in storages
-                            ] + [[InlineKeyboardButton('Добавить новый склад',
+                            ] + [[InlineKeyboardButton('Добавить новый «склад»',
                                                        callback_data=CREATE_CUBE_STORAGE)]
                                  ] + keyboard
                 send_message_text(bot, update, user_data,
@@ -1506,6 +1507,182 @@ def create_event_series(bot, update, user_data):
     del user_data['event_name']
 
 
+SUPER_ADMIN_LEVEL = 2   # TODO move this constant
+
+
+@region_decorator
+@has_admin_rights
+def show_region_settings_start(bot, update, user_data, region_id):
+    user_telegram_id = update.effective_user.id
+    region = models.Region.get_by_id(region_id)
+    text = 'Штаб *%s*' % region.show()
+    keyboard = []
+    if models.AdminRights.has_admin_rights(user_telegram_id, region_id, SUPER_ADMIN_LEVEL):
+        text += '\nАдмины штаба:\n' + '\n'.join(map(lambda kvp: kvp[0].show(private=True),
+                                                    models.AdminRights.get_region_admins(region_id).items()))
+        keyboard.append([InlineKeyboardButton('Управление админами', callback_data=MANAGE_ADMIN_RIGHTS)])
+    if region.settings.is_public:
+        keyboard.append([InlineKeyboardButton('Скрыть штаб от пользователей', callback_data=CHANGE_REGION_PUBLICITY)])
+    else:
+        text += '\n\n_Штаб скрыт от пользователей_'
+        keyboard.append([InlineKeyboardButton('Показать штаб пользователям', callback_data=CHANGE_REGION_PUBLICITY)])
+    if region.settings.enabled_cube_logistics:
+        text += '\n\n_Раздел «Логистика кубов» включен_'
+        keyboard.append([InlineKeyboardButton('Отключить раздел «Логистика кубов»', callback_data=CHANGE_CUBE_LOGISTICS)])
+    else:
+        keyboard.append([InlineKeyboardButton('Включить раздел «Логистика кубов»', callback_data=CHANGE_CUBE_LOGISTICS)])
+    keyboard.append([InlineKeyboardButton('<< Меню', callback_data=MENU)])
+    send_message_text(bot, update, user_data,
+                      text,
+                      parse_mode='Markdown',
+                      reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+@region_decorator
+@has_admin_rights
+def manage_admin_rights_start(bot, update, user_data, region_id):
+    user_telegram_id = update.effective_user.id
+    level = models.AdminRights.get_admin_rights_level(user_telegram_id, region_id)
+    if level < SUPER_ADMIN_LEVEL:
+        return SHOW_REGION_SETTINGS
+    region = models.Region.get_by_id(region_id)
+    text = 'Управление админами штаба *%s*\n' % region.show()
+    keyboard = []
+    for user in models.AdminRights.can_disrank(user_telegram_id, region_id, level):
+        keyboard.append([InlineKeyboardButton('Разжаловать %s' % user.show(markdown=False),
+                                              callback_data=DEL_ADMIN_RIGHTS + str(user.id))])
+    keyboard.append([InlineKeyboardButton('Добавить админа', callback_data=ADD_ADMIN_RIGHTS)])
+    keyboard.append([InlineKeyboardButton('<< Назад', callback_data=SHOW_REGION_SETTINGS)])
+    send_message_text(bot, update, user_data,
+                      text,
+                      parse_mode='Markdown',
+                      reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+@region_decorator
+@has_admin_rights
+def manage_admin_rights_button(bot, update, user_data, region_id):
+    query = update.callback_query
+    query.answer()
+    if query.data in [ADD_ADMIN_RIGHTS, SHOW_REGION_SETTINGS]:
+        return query.data
+    else:
+        match = re.match('%s(\d+)' % DEL_ADMIN_RIGHTS, query.data)
+        if bool(match):
+            user_telegram_id = update.effective_user.id
+            level = models.AdminRights.get_admin_rights_level(user_telegram_id, region_id)
+            user_id = int(match.group(1))
+            models.AdminRights.disrank(user_id, region_id, level)
+
+
+@region_decorator
+@has_admin_rights
+def add_admin_rights_start(bot, update, user_data, region_id):
+    user_telegram_id = update.effective_user.id
+    level = models.AdminRights.get_admin_rights_level(user_telegram_id, region_id)
+    if level < SUPER_ADMIN_LEVEL:
+        return SHOW_REGION_SETTINGS
+    text = 'Укажите нового админа'
+    keyboard = [[InlineKeyboardButton('<< Назад', callback_data=MANAGE_ADMIN_RIGHTS)]]
+    send_message_text(bot, update, user_data,
+                      text,
+                      parse_mode='Markdown',
+                      reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+@region_decorator
+@has_admin_rights
+def add_admin_rights_text(bot, update, user_data, region_id):
+    user = _extract_mentioned_user(update.message)
+    if user:
+        models.AdminRights.objects.create(user=user,
+                                          region_id=region_id)
+        return MANAGE_ADMIN_RIGHTS
+
+
+@region_decorator
+@has_admin_rights
+def change_region_publicity_start(bot, update, user_data, region_id):
+    region = models.Region.get_by_id(region_id)
+    text = 'Штаб *%s*\n' % region.show()
+    keyboard = []
+    if region.settings.is_public:
+        text += 'Штаб присутствует в общем списке штабов. ' \
+                'Любой человек может зарегистрироваться в этом штабе и пользоваться ботом. ' \
+                'Вы можете скрыть штаб из общего списка, тогда новые пользователи не смогут ' \
+                'зарегистрироваться в этом штабе.'
+        keyboard.append([InlineKeyboardButton('Скрыть штаб от пользователей', callback_data=NO)])
+    else:
+        text += 'Штаб скрыт из общего списка штабов.' \
+                'Если вы решите использовать бота в своем регионе, то покажите штаб пользователям.'
+        keyboard.append([InlineKeyboardButton('Показать штаб пользователям', callback_data=YES)])
+    keyboard.append([InlineKeyboardButton('<< Назад', callback_data=SHOW_REGION_SETTINGS)])
+    send_message_text(bot, update, user_data,
+                      text,
+                      parse_mode='Markdown',
+                      reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+@region_decorator
+def change_region_publicity_button(bot, update, user_data, region_id):
+    query = update.callback_query
+    query.answer()
+    if query.data in [SHOW_REGION_SETTINGS]:
+        return query.data
+    elif query.data == YES:
+        region = models.Region.get_by_id(region_id)
+        region.settings.is_public = True
+        region.settings.save()
+        return SHOW_REGION_SETTINGS
+    elif query.data == NO:
+        region = models.Region.get_by_id(region_id)
+        region.settings.is_public = False
+        region.settings.save()
+        return SHOW_REGION_SETTINGS
+
+
+@region_decorator
+@has_admin_rights
+def change_cube_logistics_start(bot, update, user_data, region_id):
+    region = models.Region.get_by_id(region_id)
+    text = 'Штаб *%s*\n' % region.show()
+    text += 'Раздел «Логистика кубов» позволяет заполнять информацию о том, как доставляется ' \
+            'куб на место проведения мероприятия.\n\n'
+    keyboard = []
+    if region.settings.enabled_cube_logistics:
+        text += 'Вы можете отключить данную функциональность.\n' \
+                'Если у вас есть идеи, как улучшить данный инструмент, напишите @kurpilyansky.'
+        keyboard.append([InlineKeyboardButton('Отключить раздел «Логистика кубов»', callback_data=NO)])
+    else:
+        text += 'Если ваш город небольшой, то, скорее всего, вам не нужна данная функциональность.\n' \
+                'Если вы храните кубы не только в штабе, если доставляете куб на машине ' \
+                '(каждый раз разной), то попробуйте использовать данную функциональность.' \
+                'Она может облегчить жизнь и вам, и волонтерам.'
+        keyboard.append([InlineKeyboardButton('Включить раздел «Логистика кубов»', callback_data=YES)])
+    keyboard.append([InlineKeyboardButton('<< Назад', callback_data=SHOW_REGION_SETTINGS)])
+    send_message_text(bot, update, user_data,
+                      text,
+                      parse_mode='Markdown',
+                      reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+@region_decorator
+def change_cube_logistics_button(bot, update, user_data, region_id):
+    query = update.callback_query
+    region = models.Region.get_by_id(region_id)
+    query.answer()
+    if query.data in [SHOW_REGION_SETTINGS]:
+        return query.data
+    elif query.data == YES:
+        region.settings.enabled_cube_logistics = True
+        region.settings.save()
+        return SHOW_REGION_SETTINGS
+    elif query.data == NO:
+        region.settings.enabled_cube_logistics = False
+        region.settings.save()
+        return SHOW_REGION_SETTINGS
+
+
 def clear_user_data(user_data, keep_keys=None):
     for key in list(user_data.keys()):
         if not (keep_keys and key in keep_keys):
@@ -1661,7 +1838,19 @@ def run_bot():
             CREATE_EVENT_SERIES_CONFIRM: [EmptyHandler(create_event_series_confirm, pass_user_data=True),
                                           CallbackQueryHandler(create_event_series_confirm_button, pass_user_data=True)],
             CREATE_EVENT_SERIES: [EmptyHandler(create_event_series, pass_user_data=True),
-                                  standard_callback_query_handler]
+                                  standard_callback_query_handler],
+            SHOW_REGION_SETTINGS: [EmptyHandler(show_region_settings_start, pass_user_data=True),
+                                   standard_callback_query_handler],
+            MANAGE_ADMIN_RIGHTS: [EmptyHandler(manage_admin_rights_start, pass_user_data=True),
+                                  CallbackQueryHandler(manage_admin_rights_button, pass_user_data=True)],
+            ADD_ADMIN_RIGHTS: [EmptyHandler(add_admin_rights_start, pass_user_data=True),
+                               MessageHandler(Filters.text | Filters.contact,
+                                              add_admin_rights_text, pass_user_data=True),
+                               standard_callback_query_handler],
+            CHANGE_REGION_PUBLICITY: [EmptyHandler(change_region_publicity_start, pass_user_data=True),
+                                      CallbackQueryHandler(change_region_publicity_button, pass_user_data=True)],
+            CHANGE_CUBE_LOGISTICS: [EmptyHandler(change_cube_logistics_start, pass_user_data=True),
+                                    CallbackQueryHandler(change_cube_logistics_button, pass_user_data=True)],
         },
         pre_fallbacks=[CallbackQueryHandler(force_button_query_handler, pattern='^%s_' % FORCE_BUTTON, pass_user_data=True),
                        CallbackQueryHandler(show_event_for_master,
