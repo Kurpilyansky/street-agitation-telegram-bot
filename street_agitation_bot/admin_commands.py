@@ -12,7 +12,7 @@ def set_region_chat_command(bot, update, args):
     chat_id = update.effective_chat.id
     if bot_settings.is_admin_user_id(telegram_user_id):
         region_name = ' '.join(args[1:])
-        region = models.Region.find_by_name(region_name, telegram_user_id)
+        region = models.Region.find_by_name(region_name)
         if not region:
             bot.send_message(chat_id, "Регион '%s' не найден" % region_name)
         elif args[0] == '0':

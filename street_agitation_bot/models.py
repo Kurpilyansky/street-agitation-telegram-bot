@@ -5,7 +5,7 @@ from django.db import transaction
 
 from django.db import models
 
-from street_agitation_bot import bot_settings, utils
+from street_agitation_bot import utils
 from street_agitation_bot.emoji import *
 
 from datetime import timedelta
@@ -17,14 +17,9 @@ class Region(models.Model):
 
     timezone_delta = models.IntegerField(help_text='Разница с UTC в секундах, например, для UTC+3 указано +10800')
 
-    is_public = models.BooleanField()
-
     @classmethod
-    def find_by_name(cls, name, user_id=None):
-        region = cls.objects.filter(name=name).first()
-        if region and (region.is_public or bot_settings.is_admin_user_id(user_id)):
-            return region
-        return None
+    def find_by_name(cls, name):
+        return cls.objects.filter(name=name).first()
 
     @classmethod
     def get_by_id(cls, region_id):
@@ -41,6 +36,13 @@ class Region(models.Model):
 
     class Meta:
         ordering = ('name',)
+
+
+class RegionSettings(models.Model):
+    region = models.OneToOneField(Region, related_name='settings')
+
+    is_public = models.BooleanField(default=False)
+    enabled_cube_logistics = models.BooleanField(default=False)
 
 
 class User(models.Model):

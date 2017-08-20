@@ -8,17 +8,33 @@ from . import models
 class RegionAdmin(VersionAdmin):
     list_display = (
         'id',
-        'is_public',
         'name',
     )
 
     list_filter = (
-        'is_public',
     )
 
     search_fields = (
         '=id',
         'name',
+    )
+
+
+class RegionSettingsAdmin(VersionAdmin):
+    list_display = (
+        'region',
+        'is_public',
+        'enabled_cube_logistics',
+    )
+
+    list_filter = (
+        'is_public',
+        'enabled_cube_logistics',
+    )
+
+    search_fields = (
+        '=region__id',
+        'region__name',
     )
 
 
@@ -247,6 +263,7 @@ class CubeUsageInEventAdmin(VersionAdmin):
 
 
 admin.site.register(models.Region, RegionAdmin)
+admin.site.register(models.RegionSettings, RegionSettingsAdmin)
 admin.site.register(models.User, UserAdmin)
 admin.site.register(models.AdminRights, AdminRightsAdmin)
 admin.site.register(models.AgitatorInRegion, AgitatorInRegionAdmin)

@@ -1,3 +1,5 @@
+from django.db.models import Q
+
 from street_agitation_bot import bot_settings, models, notifications, utils, cron, admin_commands
 from street_agitation_bot.emoji import *
 
@@ -170,8 +172,12 @@ def _in_range(range, region):
 def _build_add_region_keyboard(update, user_data):
     show_all = user_data.get('show_all_regions', False)
     user_telegram_id = update.effective_user.id
-    regions = list(models.Region.objects.filter(is_public=True))
+    public_regions = list(models.Region.objects.filter(settings__is_public=True))
     my_regions = list(models.Region.objects.filter(agitatorinregion__agitator__telegram_id=user_telegram_id))
+    regions = list({r.id: r for r in public_regions + my_regions}.values())
+    # TODO why it is not working? :( result contain duplicates
+    # regions = list(models.Region.objects.filter(Q(settings__is_public=True)
+    #                                             | Q(agitatorinregion__agitator__telegram_id=user_telegram_id)))
     if 'region_range' in user_data:
         range = user_data['region_range']
         regions = list(filter(lambda r: _in_range(range, r), regions))
