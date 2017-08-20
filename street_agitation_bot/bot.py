@@ -303,6 +303,7 @@ def show_menu(bot, update, user_data):
         keyboard.append([InlineKeyboardButton('Расписание', callback_data=SCHEDULE)])
         keyboard.append([InlineKeyboardButton('Записаться', callback_data=APPLY_TO_AGITATE)])
         region_id = user_data['region_id']
+        region = models.Region.get_by_id(region_id)
         user_telegram_id = update.effective_user.id
         abilities = models.AgitatorInRegion.get(region_id, user_telegram_id)
         if not abilities:
@@ -317,7 +318,8 @@ def show_menu(bot, update, user_data):
         if models.AdminRights.has_admin_rights(user_telegram_id, region_id):
             keyboard.append([InlineKeyboardButton('Добавить ивент', callback_data=SET_EVENT_NAME)])
             keyboard.append([InlineKeyboardButton('Управление ивентами', callback_data=MANAGE_EVENTS)])
-            keyboard.append([InlineKeyboardButton('Логистика', callback_data=MANAGE_CUBES)])
+            if region.settings.enabled_cube_logistics:
+                keyboard.append([InlineKeyboardButton('Логистика', callback_data=MANAGE_CUBES)])
             keyboard.append([InlineKeyboardButton('Сделать рассылку', callback_data=MAKE_BROADCAST)])
     else:
         return SELECT_REGION
@@ -1414,6 +1416,8 @@ def _create_events(user_data):
     if to_seconds < from_seconds:
         to_seconds += 86400
 
+    region = models.Region.get_by_id(user_data['region_id'])
+
     events = list()
     for date_tuple in user_data['dates']:
         # TODO timezone
@@ -1424,7 +1428,7 @@ def _create_events(user_data):
             master_id=user_data['master_id'],
             place=place,
             name=event_name,
-            need_cube=(event_name == 'Куб'),  # TODO small hack
+            need_cube=(region.settings.enabled_cube_logistics and event_name == 'Куб'),  # TODO small hack
             start_date=event_datetime + timedelta(seconds=from_seconds),
             end_date=event_datetime + timedelta(seconds=to_seconds),
         )
