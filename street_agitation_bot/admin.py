@@ -122,6 +122,8 @@ class AgitationPlaceAdmin(VersionAdmin):
         'address',
     )
 
+    ordering = ('-last_update_time',)
+
 
 class AgitationPlaceHierarchyAdmin(VersionAdmin):
     list_display = (
@@ -160,6 +162,7 @@ class AgitationEventAdmin(VersionAdmin):
         'place__address',
         'place__region__name',
     )
+    ordering = ('-start_date', 'place_id')
 
 
 class AgitationEventParticipantAdmin(VersionAdmin):
