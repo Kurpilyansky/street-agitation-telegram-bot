@@ -17,7 +17,9 @@ class TelegramClient:
 
     def make_request(self, request):
         self.socket.send(str.encode(request + '\n'))
-        response = self.socket.recv(2048).decode()
+        response = self.socket.recv(2048)
+        print(response)
+        response = response.decode()
         match = re.match('ANSWER (\d+)\n(.*)', response)
         if bool(match):
             return json.loads(match.group(2))
@@ -66,7 +68,7 @@ class Command(management_base.BaseCommand):
 
     def handle(self, *args, **options):
         telegram_client = TelegramClient("localhost", options['telegram_cli_port'])
-        all_regions = {region.name: region for region in models.Region.objects.all()}
+        all_regions = {region.name: region for region in models.Region.objects.select_related('settings').all()}
         super_admin_username = options['super_admin_username']
         with open(options['file'], 'r') as f:
             for line in f.readlines():
@@ -78,9 +80,16 @@ class Command(management_base.BaseCommand):
                 else:
                     timezone = guess_timezone(region_name)
                     region = models.Region(name=region_name,
-                                           timezone_delta=timezone,
-                                           is_public=False)
+                                           timezone_delta=timezone)
                     region.save()
+                    models.RegionSettings.objects.create(region=region)
                     all_regions[region_name] = region
+                admin_user = models.User.update_or_create({'telegram': admin_username})[0]
+                if not region.settings.is_public:
+                    models.AgitatorInRegion.save_abilities(region.id, admin_user, {})
+                if not models.AdminRights.objects.filter(user_id=admin_user.id, region_id=region.id).first():
+                    models.AdminRights.objects.create(user_id=admin_user.id,
+                                                      region_id=region.id,
+                                                      level=models.AdminRights.SUPER_ADMIN_LEVEL)
                 if not region.registrations_chat_id:
                     create_region_chat(telegram_client, region, [super_admin_username, admin_username], 0)

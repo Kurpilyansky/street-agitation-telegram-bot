@@ -67,7 +67,7 @@ class User(models.Model):
 
     @classmethod
     def update_or_create(cls, params):
-        params['phone'] = utils.clean_phone_number(params['phone'])
+        params['phone'] = utils.clean_phone_number(params['phone']) if 'phone' in params else ''
         with transaction.atomic():
             user_by_telegram_id = cls._single_by('telegram_id', params)
             user_by_telegram = cls._single_by('telegram', params)
