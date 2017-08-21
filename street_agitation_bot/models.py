@@ -122,6 +122,8 @@ class User(models.Model):
 
 
 class AdminRights(models.Model):
+    SUPER_ADMIN_LEVEL = 2
+
     user = models.ForeignKey(User)
     region = models.ForeignKey(Region, null=True, blank=True)
     level = models.IntegerField(default=1)

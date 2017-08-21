@@ -1507,9 +1507,6 @@ def create_event_series(bot, update, user_data):
     del user_data['event_name']
 
 
-SUPER_ADMIN_LEVEL = 2   # TODO move this constant
-
-
 @region_decorator
 @has_admin_rights
 def show_region_settings_start(bot, update, user_data, region_id):
@@ -1517,7 +1514,7 @@ def show_region_settings_start(bot, update, user_data, region_id):
     region = models.Region.get_by_id(region_id)
     text = 'Штаб *%s*' % region.show()
     keyboard = []
-    if models.AdminRights.has_admin_rights(user_telegram_id, region_id, SUPER_ADMIN_LEVEL):
+    if models.AdminRights.has_admin_rights(user_telegram_id, region_id, models.AdminRights.SUPER_ADMIN_LEVEL):
         text += '\nАдмины штаба:\n' + '\n'.join(map(lambda kvp: kvp[0].show(private=True),
                                                     models.AdminRights.get_region_admins(region_id).items()))
         keyboard.append([InlineKeyboardButton('Управление админами', callback_data=MANAGE_ADMIN_RIGHTS)])
@@ -1543,7 +1540,7 @@ def show_region_settings_start(bot, update, user_data, region_id):
 def manage_admin_rights_start(bot, update, user_data, region_id):
     user_telegram_id = update.effective_user.id
     level = models.AdminRights.get_admin_rights_level(user_telegram_id, region_id)
-    if level < SUPER_ADMIN_LEVEL:
+    if level < models.AdminRights.SUPER_ADMIN_LEVEL:
         return SHOW_REGION_SETTINGS
     region = models.Region.get_by_id(region_id)
     text = 'Управление админами штаба *%s*\n' % region.show()
@@ -1580,7 +1577,7 @@ def manage_admin_rights_button(bot, update, user_data, region_id):
 def add_admin_rights_start(bot, update, user_data, region_id):
     user_telegram_id = update.effective_user.id
     level = models.AdminRights.get_admin_rights_level(user_telegram_id, region_id)
-    if level < SUPER_ADMIN_LEVEL:
+    if level < models.AdminRights.SUPER_ADMIN_LEVEL:
         return SHOW_REGION_SETTINGS
     text = 'Укажите нового админа'
     keyboard = [[InlineKeyboardButton('<< Назад', callback_data=MANAGE_ADMIN_RIGHTS)]]
