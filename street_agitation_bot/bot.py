@@ -1548,7 +1548,7 @@ def manage_admin_rights_start(bot, update, user_data, region_id):
     region = models.Region.get_by_id(region_id)
     text = 'Управление админами штаба *%s*\n' % region.show()
     keyboard = []
-    for user in models.AdminRights.can_disrank(user_telegram_id, region_id, level):
+    for user in models.AdminRights.can_disrank(region_id, level):
         keyboard.append([InlineKeyboardButton('Разжаловать %s' % user.show(markdown=False),
                                               callback_data=DEL_ADMIN_RIGHTS + str(user.id))])
     keyboard.append([InlineKeyboardButton('Добавить админа', callback_data=ADD_ADMIN_RIGHTS)])

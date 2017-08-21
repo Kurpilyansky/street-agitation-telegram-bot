@@ -144,7 +144,7 @@ class AdminRights(models.Model):
                            .aggregate(models.Max('level'))['level__max'])
 
     @classmethod
-    def can_disrank(cls, user_telegram_id, region_id, level):
+    def can_disrank(cls, region_id, level):
         return list(set(map(lambda x: x.user,
                             cls.objects.select_related('user')
                                .filter(region_id=region_id, level__lt=level)
