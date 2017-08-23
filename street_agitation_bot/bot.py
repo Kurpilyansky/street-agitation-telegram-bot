@@ -1292,6 +1292,7 @@ def select_event_place(bot, update, user_data, region_id):
     for place in places:
         keyboard.append([InlineKeyboardButton(place.address, callback_data=str(place.id))])
     keyboard.extend(_build_paging_buttons(offset, query_set.count(), PLACE_PAGE_SIZE))
+    keyboard.append([InlineKeyboardButton('<< Назад', callback_data=SET_EVENT_PLACE)])
     send_message_text(bot, update, user_data, "Выберите место", reply_markup=InlineKeyboardMarkup(keyboard))
 
 
@@ -1299,7 +1300,9 @@ def select_event_place(bot, update, user_data, region_id):
 def select_event_place_button(bot, update, user_data):
     query = update.callback_query
     query.answer()
-    if query.data == BACK:
+    if query.data in [SET_EVENT_PLACE]:
+        return query.data
+    elif query.data == BACK:
         user_data['place_offset'] -= PLACE_PAGE_SIZE
     elif query.data == FORWARD:
         user_data['place_offset'] += PLACE_PAGE_SIZE
