@@ -92,10 +92,18 @@ class User(models.Model):
                 return cls.objects.create(**params), True
 
     def show(self, markdown=True, private=True):
-        if private:
-            return self.show_full()
-        else:
+        if not markdown:
             return self.full_name
+        escaped_full_name = utils.escape_markdown(self.full_name)
+        if not self.telegram_id:
+            if private:
+                return utils.escape_markdown('%s %s' % (escaped_full_name, self.phone))
+            else:
+                return escaped_full_name
+        # elif self.telegram:
+        #     return '%s @%s' % (escaped_full_name, utils.escape_markdown(self.telegram))
+        else:
+            return '[%s](tg://user?id=%s)' % (escaped_full_name, self.telegram_id)
 
     @property
     def full_name(self):
