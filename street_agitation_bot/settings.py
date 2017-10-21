@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     'reversion',
 
     'street_agitation_bot',
+    'door_to_door_bot',
 ]
 
 MIDDLEWARE = [

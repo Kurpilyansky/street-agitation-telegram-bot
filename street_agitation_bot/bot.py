@@ -1759,6 +1759,8 @@ def run_bot():
     standard_callback_query_handler = CallbackQueryHandler(standard_callback)
 
     conv_handler = ConversationHandler(
+        user_model=models.User,
+        conversation_state_model=models.ConversationState,
         entry_points=[CommandHandler("start", start)],
         unknown_state_handler=EmptyHandler(cancel, pass_user_data=True),
         states={

@@ -21,8 +21,6 @@
 import json
 import logging
 
-from street_agitation_bot import models
-
 from telegram import Update
 from telegram.ext import (Filters, Handler, CallbackQueryHandler, InlineQueryHandler,
                           ChosenInlineResultHandler)
@@ -112,6 +110,8 @@ class ConversationHandler(Handler):
                  unknown_state_handler,
                  fallbacks,
                  pre_fallbacks,
+                 user_model,
+                 conversation_state_model,
                  allow_reentry=False,
                  run_async_timeout=None,
                  timed_out_behavior=None,
@@ -128,6 +128,9 @@ class ConversationHandler(Handler):
         self.pre_fallbacks = pre_fallbacks
         self.fallbacks = fallbacks
         """:type: list[telegram.ext.Handler]"""
+
+        self.user_model = user_model
+        self.conversation_state_model = conversation_state_model
 
         self.allow_reentry = allow_reentry
         self.run_async_timeout = run_async_timeout
@@ -310,17 +313,17 @@ class ConversationHandler(Handler):
 
     def _load_state(self, key):
         if key not in self.conversations and key not in self._state_in_database:
-            state_in_database = models.ConversationState.objects.filter(key=key).first()
+            state_in_database = self.conversation_state_model.objects.filter(key=key).first()
             if state_in_database:
                 self.conversations[key] = state_in_database.state
                 self._need_update_user_data[key] = True
                 self._state_in_database[key] = state_in_database
             else:
-                self._state_in_database[key] = models.ConversationState(key=key)
+                self._state_in_database[key] = self.conversation_state_model(key=key)
 
     def _save_state(self, key, dispatcher, user_telegram_id):
-        state_in_database = self._state_in_database.get(key, models.ConversationState(key=key))
-        user = models.User.find_by_telegram_id(user_telegram_id)
+        state_in_database = self._state_in_database.get(key, self.conversation_state_model(key=key))
+        user = self.user_model.find_by_telegram_id(user_telegram_id)
         if user:
             state_in_database.agitator = user
         state_in_database.state = self.conversations.get(key)

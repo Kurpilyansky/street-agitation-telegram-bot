@@ -1,7 +1,7 @@
 
-BOT_TOKEN = "217345679:AAEQCL64i_Na4CtjOkwYtbrGT9ZxgDZED74"
+BOT_TOKEN = "BOT_TOKEN"
 
-BOT_USERNAME = 'DembelBot'
+BOT_USERNAME = 'Bot'
 
 admin_telegram_user_ids = [12211357]
 
