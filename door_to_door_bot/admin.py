@@ -144,6 +144,51 @@ class StreetAdmin(VersionAdmin):
     )
 
 
+class HouseAdmin(VersionAdmin):
+    list_display = (
+        'street',
+        'number',
+    )
+    list_filter = (
+        'street__region',
+    )
+    search_fields = (
+        'street__name',
+        'number',
+    )
+
+
+class HouseBlockAdmin(VersionAdmin):
+    list_display = (
+        'house',
+        'number',
+    )
+    list_filter = (
+        'house__street__region',
+    )
+    search_fields = (
+        'house__street__name',
+        'house__number',
+        'number',
+    )
+
+
+class FlatAdmin(VersionAdmin):
+    list_display = (
+        'house_block',
+        'number',
+    )
+    list_filter = (
+        'house_block__house__street__region',
+    )
+    search_fields = (
+        'house_block__house__street__name',
+        'house_block__house__number',
+        'house_block__number',
+        'number',
+    )
+
+
 admin.site.register(models.Region, RegionAdmin)
 admin.site.register(models.RegionSettings, RegionSettingsAdmin)
 admin.site.register(models.User, UserAdmin)
@@ -152,6 +197,6 @@ admin.site.register(models.AgitatorInRegion, AgitatorInRegionAdmin)
 admin.site.register(models.ConversationState, ConversationStateAdmin)
 admin.site.register(models.AgitationTeam, AgitationTeamAdmin)
 admin.site.register(models.Street, StreetAdmin)
-# admin.site.register(models.House, HouseAdmin)
-# admin.site.register(models.HouseBlock, HouseBlockAdmin)
-# admin.site.register(models.Flat, FlatAdmin)
+admin.site.register(models.House, HouseAdmin)
+admin.site.register(models.HouseBlock, HouseBlockAdmin)
+admin.site.register(models.Flat, FlatAdmin)

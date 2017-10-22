@@ -224,10 +224,28 @@ class Street(models.Model):
     region = models.ForeignKey(Region)
     name = models.CharField(max_length=500)
 
+    def show(self, markdown=True, full=True):
+        if markdown:
+            return utils.escape_markdown(self.name)
+        else:
+            return self.name
+
+    def __str__(self):
+        return '%s %s' % (self.region, self.name)
+
 
 class House(models.Model):
     street = models.ForeignKey(Street)
-    number = models.CharField(max_length=100, null=True, blank=True)
+    number = models.CharField(max_length=100)
+
+    def show(self, markdown=True, full=True):
+        text = utils.escape_markdown(self.number) if markdown else self.number
+        if full:
+            text = '%s %s' % (self.street.show(markdown, full), text)
+        return text
+
+    def __str__(self):
+        return '%s %s' % (self.street, self.number)
 
 
 class HouseBlock(models.Model):
@@ -236,10 +254,28 @@ class HouseBlock(models.Model):
     min_flat_number = models.IntegerField(null=True, blank=True)
     max_flat_number = models.IntegerField(null=True, blank=True)
 
+    def show(self, markdown=True, full=True):
+        text = utils.escape_markdown(self.number) if markdown else self.number
+        if full:
+            text = '%s подъезд №%s' % (self.house.show(markdown, full), text)
+        return text
+
+    def __str__(self):
+        return '%s подъезд №%s' % (self.house, self.number)
+
 
 class Flat(models.Model):
     house_block = models.ForeignKey(HouseBlock)
     number = models.CharField(max_length=10)
+
+    def show(self, markdown=True, full=True):
+        text = utils.escape_markdown(self.number) if markdown else self.number
+        if full:
+            text = '%s кв.%s' % (self.house_block.show(markdown, full), text)
+        return text
+
+    def __str__(self):
+        return '%s кв.%s' % (self.house_block, self.number)
 
 
 class AgitationTeam(models.Model):

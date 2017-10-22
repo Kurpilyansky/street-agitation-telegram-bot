@@ -354,8 +354,6 @@ def run_bot():
     admin_handlers.register(dp)
     agitation_process_handlers.register(dp)
 
-    standard_callback_query_handler = CallbackQueryHandler(standard_callback)
-
     states_handlers = {
             REGISTER_USER: [EmptyHandler(register_user_start, pass_user_data=True),
                             MessageHandler(Filters.contact, register_user, pass_user_data=True)],

@@ -1,4 +1,7 @@
 
+from telegram import (InlineKeyboardButton)
+from telegram.ext import (CallbackQueryHandler)
+
 from datetime import datetime
 from door_to_door_bot import models
 from door_to_door_bot.bot_constants import *
@@ -67,6 +70,9 @@ def standard_callback(bot, update):
     return query.data
 
 
+standard_callback_query_handler = CallbackQueryHandler(standard_callback)
+
+
 def start(bot, update):
     if models.User.find_by_telegram_id(update.effective_user.id):
         return MENU
@@ -89,3 +95,14 @@ def change_region(bot, update, user_data):
     clear_user_data(user_data, ['last_bot_message_id', 'last_bot_message_ts'])
     return SELECT_REGION
 
+
+def build_paging_buttons(offset, count, page_size):
+    paging_buttons = []
+    if offset > 0:
+        paging_buttons.append(InlineKeyboardButton('<<', callback_data=BACK))
+    if count > offset + page_size:
+        paging_buttons.append(InlineKeyboardButton('>>', callback_data=FORWARD))
+    if paging_buttons:
+        return [paging_buttons]
+    else:
+        return []
