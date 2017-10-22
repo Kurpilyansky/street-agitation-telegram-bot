@@ -241,7 +241,7 @@ class House(models.Model):
     def show(self, markdown=True, full=True):
         text = utils.escape_markdown(self.number) if markdown else self.number
         if full:
-            text = '%s %s' % (self.street.show(markdown, full), text)
+            text = '%s д.%s' % (self.street.show(markdown, full), text)
         return text
 
     def __str__(self):

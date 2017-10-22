@@ -118,6 +118,7 @@ class ConversationStateAdmin(VersionAdmin):
 
 class AgitationTeamAdmin(VersionAdmin):
     list_display = (
+        'id',
         'region',
         'start_time',
         'place',
@@ -133,6 +134,7 @@ class AgitationTeamAdmin(VersionAdmin):
 
 class StreetAdmin(VersionAdmin):
     list_display = (
+        'id',
         'region',
         'name',
     )
@@ -146,6 +148,7 @@ class StreetAdmin(VersionAdmin):
 
 class HouseAdmin(VersionAdmin):
     list_display = (
+        'id',
         'street',
         'number',
     )
@@ -160,6 +163,7 @@ class HouseAdmin(VersionAdmin):
 
 class HouseBlockAdmin(VersionAdmin):
     list_display = (
+        'id',
         'house',
         'number',
     )
@@ -175,6 +179,7 @@ class HouseBlockAdmin(VersionAdmin):
 
 class FlatAdmin(VersionAdmin):
     list_display = (
+        'id',
         'house_block',
         'number',
     )

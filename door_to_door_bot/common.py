@@ -96,12 +96,16 @@ def change_region(bot, update, user_data):
     return SELECT_REGION
 
 
-def build_paging_buttons(offset, count, page_size):
+def build_paging_buttons(offset, count, page_size, fast=False):
     paging_buttons = []
     if offset > 0:
-        paging_buttons.append(InlineKeyboardButton('<<', callback_data=BACK))
+        if fast:
+            paging_buttons.append(InlineKeyboardButton('<<', callback_data=TO_BEGIN))
+        paging_buttons.append(InlineKeyboardButton('<', callback_data=BACK))
     if count > offset + page_size:
-        paging_buttons.append(InlineKeyboardButton('>>', callback_data=FORWARD))
+        paging_buttons.append(InlineKeyboardButton('>', callback_data=FORWARD))
+        if fast:
+            paging_buttons.append(InlineKeyboardButton('>>', callback_data=TO_END))
     if paging_buttons:
         return [paging_buttons]
     else:

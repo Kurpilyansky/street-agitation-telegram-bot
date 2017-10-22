@@ -1,5 +1,7 @@
 import re
 
+from django.db import transaction
+
 from telegram import (ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove,
                       InlineKeyboardButton, InlineKeyboardMarkup,
                       InlineQueryResultArticle, TelegramError)
@@ -37,7 +39,7 @@ def team_decorator(func):
         else:
             team_id = int(chat_data['team_id'])
             team = models.AgitationTeam.objects.get(id=team_id)
-        return func(bot, update, chat_data, team=team, *args, **kwargs)
+        return func(bot, update, chat_data=chat_data, team=team, *args, **kwargs)
 
     return wrapper
 
@@ -125,14 +127,18 @@ class ObjectSelector(object):
 
     def _handle_start(self, bot, update, chat_data):
         query_set = self._get_query_set(chat_data)
+        total_count = query_set.count()
         offset = self._get_offset(chat_data)
-        if offset < 0 or offset >= query_set.count():
+        if offset < 0:
             offset = 0
+        if offset >= total_count:
+            offset = max(0, total_count - self._page_size)
+        self._set_offset(chat_data, offset)
         objects = list(query_set[offset:][:self._page_size])
         buttons = [InlineKeyboardButton(obj.show(markdown=False, full=False), callback_data=str(obj.id))
                    for obj in objects]
         keyboard = utils.chunks(buttons, self._keyboard_size[0])
-        keyboard += build_paging_buttons(offset, query_set.count(), self._page_size)
+        keyboard += build_paging_buttons(offset, total_count, self._page_size, True)
         pattern = self._get_pattern(chat_data)
         if pattern:
             keyboard.append([InlineKeyboardButton('-- Сбросить фильтр "%s" --' % pattern,
@@ -159,10 +165,14 @@ class ObjectSelector(object):
         elif query.data == RETURN_TO_BACK:
             self._clear_data(chat_data)
             return self._prev_state_name
+        elif query.data == TO_BEGIN:
+            self._set_offset(chat_data, 0)
+        elif query.data == TO_END:
+            self._set_offset(chat_data, 1000000)
         elif query.data == BACK:
-            self._set_offset(chat_data, self._get_offset(chat_data) + self._page_size)
-        elif query.data == FORWARD:
             self._set_offset(chat_data, self._get_offset(chat_data) - self._page_size)
+        elif query.data == FORWARD:
+            self._set_offset(chat_data, self._get_offset(chat_data) + self._page_size)
         else:
             match = re.match('\d+', query.data)
             if match:
@@ -197,9 +207,10 @@ class HouseSelector(ObjectSelector):
     _state_name = CHOOSE_HOUSE
     _next_state_name = CHOOSE_HOUSE_BLOCK
     _add_state_name = ADD_HOUSE
+    _keyboard_size = (4, 4)
 
     def _get_query_set(self, chat_data):
-        houses_set = models.House.objects
+        houses_set = models.House.objects.filter(street_id=chat_data['street_id'])
         pattern = self._get_pattern(chat_data)
         if pattern:
             houses_set = houses_set.filter(number__icontains=pattern)
@@ -216,9 +227,10 @@ class HouseBlockSelector(ObjectSelector):
     _state_name = CHOOSE_HOUSE_BLOCK
     _next_state_name = CHOOSE_FLAT
     _add_state_name = ADD_HOUSE_BLOCK
+    _keyboard_size = (4, 4)
 
     def _get_query_set(self, chat_data):
-        blocks_set = models.HouseBlock.objects
+        blocks_set = models.HouseBlock.objects.filter(house_id=chat_data['house_id'])
         pattern = self._get_pattern(chat_data)
         if pattern:
             blocks_set = blocks_set.filter(number__icontains=pattern)
@@ -235,9 +247,10 @@ class FlatSelector(ObjectSelector):
     _state_name = CHOOSE_FLAT
     _next_state_name = CONTACT_FLAT
     _add_state_name = ADD_FLAT
+    _keyboard_size = (3, 4)
 
     def _get_query_set(self, chat_data):
-        flats_set = models.Flat.objects
+        flats_set = models.Flat.objects.filter(house_block_id=chat_data['house_block_id'])
         pattern = self._get_pattern(chat_data)
         if pattern:
             flats_set = flats_set.filter(number__icontains=pattern)
@@ -247,8 +260,119 @@ class FlatSelector(ObjectSelector):
         house_block = (models.HouseBlock
                              .objects
                              .select_related('house', 'house__street')
-                             .get(id=chat_data['house_id']))
+                             .get(id=chat_data['house_block_id']))
         return 'Выберите *квартиру* в %s' % house_block.show()
+
+
+class StreetCreator(object):
+    def __init__(self):
+        pass
+
+    def get_handlers(self):
+        return {ADD_STREET: [EmptyHandler(self._handle_start, pass_chat_data=True),
+                             MessageHandler(Filters.text, team_decorator(self._handle_text), pass_chat_data=True)]}
+
+    def _handle_start(self, bot, update, chat_data):
+        send_message_text(bot, update, 'Укажите название добавляемой улицы/проспекта/переулка. '
+                                       'Используйте сокращения ул., пр., пер. и другие. '
+                                       'Например, *Вознесенский пр.* или *ул. Мира*',
+                          chat_data=chat_data,
+                          parse_mode='Markdown')
+
+    def _handle_text(self, bot, update, chat_data, team):
+        street = models.Street(region=team.region,
+                               name=update.message.text)
+        street.save()
+        chat_data['street_id'] = street.id
+        return CHOOSE_HOUSE
+
+
+class HouseCreator(object):
+    def __init__(self):
+        pass
+
+    def get_handlers(self):
+        return {ADD_HOUSE: [EmptyHandler(self._handle_start, pass_chat_data=True),
+                            MessageHandler(Filters.text, self._handle_text, pass_chat_data=True)]}
+
+    def _handle_start(self, bot, update, chat_data):
+        street = models.Street.objects.get(id=chat_data['street_id'])
+        send_message_text(bot, update, 'Укажите номер добавляемого дома на %s.\n'
+                                       'Только номер, без слов "дом" и "д.". '
+                                       'Например, 17, 16a, 22к1, 6стр1, 20/3.' % street.show(),
+                          chat_data=chat_data,
+                          parse_mode='Markdown')
+
+    def _handle_text(self, bot, update, chat_data):
+        house = models.House(street_id=chat_data['street_id'],
+                             number=update.message.text)
+        house.save()
+        chat_data['house_id'] = house.id
+        return CHOOSE_HOUSE_BLOCK
+
+
+class HouseBlockCreator(object):
+    def __init__(self):
+        pass
+
+    def get_handlers(self):
+        return {ADD_HOUSE_BLOCK: [EmptyHandler(self._handle_start, pass_chat_data=True),
+                                  MessageHandler(Filters.text, self._handle_text, pass_chat_data=True)]}
+
+    def _handle_start(self, bot, update, chat_data):
+        house = models.House.objects.select_related('street').get(id=chat_data['house_id'])
+        send_message_text(bot, update, 'Укажите номер добавляемого подъезда в %s.\n'
+                                       'Только номер, без символов #, № и др.' % house.show(),
+                          chat_data=chat_data,
+                          parse_mode='Markdown')
+
+    def _handle_text(self, bot, update, chat_data):
+        house_block = models.HouseBlock(house_id=chat_data['house_id'],
+                                        number=update.message.text)
+        house_block.save()
+        chat_data['house_block_id'] = house_block.id
+        return CHOOSE_FLAT
+
+
+class FlatCreator(object):
+    def __init__(self):
+        pass
+
+    def get_handlers(self):
+        return {ADD_FLAT: [EmptyHandler(self._handle_start, pass_chat_data=True),
+                           MessageHandler(Filters.text, self._handle_text, pass_chat_data=True)]}
+
+    def _handle_start(self, bot, update, chat_data):
+        house_block = models.HouseBlock.objects.select_related('house', 'house__street')\
+                            .get(id=chat_data['house_block_id'])
+        send_message_text(bot, update, '%s.\n'
+                                       'Укажите номер квартиры, или диапозон квартир.\n'
+                                       'Например, *64* или *73-144*.' % house_block.show(),
+                          chat_data=chat_data,
+                          parse_mode='Markdown')
+
+    def _handle_text(self, bot, update, chat_data):
+        text = update.message.text
+        match = re.match('(\d+)(?:\s*-\s*(\d+))?', text)
+        if not match:
+            return
+        groups = match.groups()
+        if groups[1]:
+            flat_numbers = range(int(groups[0]), int(groups[1]) + 1)
+        else:
+            flat_numbers = [int(groups[0])]
+        with transaction.atomic():
+            flat_ids = []
+            for number in flat_numbers:
+                flat = models.Flat(house_block_id=chat_data['house_block_id'],
+                                   number=number)
+                flat.save()
+                flat_ids.append(flat.id)
+            if len(flat_ids) == 1:
+                chat_data['flat_id'] = flat_ids[0]
+                return CONTACT_FLAT
+            else:
+                return CHOOSE_FLAT
 
 
 def register(dp):
@@ -256,9 +380,13 @@ def register(dp):
         MENU: [EmptyHandler(show_menu, pass_chat_data=True), standard_callback_query_handler],
     }
     states_handlers.update(StreetSelector().get_handlers())
+    states_handlers.update(StreetCreator().get_handlers())
     states_handlers.update(HouseSelector().get_handlers())
+    states_handlers.update(HouseCreator().get_handlers())
     states_handlers.update(HouseBlockSelector().get_handlers())
+    states_handlers.update(HouseBlockCreator().get_handlers())
     states_handlers.update(FlatSelector().get_handlers())
+    states_handlers.update(FlatCreator().get_handlers())
     conv_handler = ConversationHandler(
         per_user=False,
         per_chat=True,
