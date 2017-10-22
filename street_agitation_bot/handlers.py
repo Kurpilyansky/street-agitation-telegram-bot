@@ -115,7 +115,8 @@ class ConversationHandler(Handler):
                  allow_reentry=False,
                  run_async_timeout=None,
                  timed_out_behavior=None,
-                 per_user=True):
+                 per_user=True,
+                 per_chat=False):
 
         self.entry_points = entry_points
         """:type: list[telegram.ext.Handler]"""
@@ -142,6 +143,9 @@ class ConversationHandler(Handler):
         self._need_update_user_data = dict()
         self.conversations = dict()
         self.per_user = per_user
+        self.per_chat = per_chat
+        if per_user and per_chat:
+            raise ValueError()
         """:type: dict[tuple: object]"""
 
         self.current_conversation = None
@@ -179,8 +183,12 @@ class ConversationHandler(Handler):
         #                             "since inline queries have no chat context.")
 
     def _get_key(self, update):
-        user = update.effective_user
-        return user.id if self.per_user else None
+        if self.per_user:
+            return update.effective_user.id
+        elif self.per_chat:
+            return update.effective_chat.id
+        else:
+            return None
 
     def check_update(self, update):
 
@@ -191,7 +199,11 @@ class ConversationHandler(Handler):
                 # or self.per_message and not update.callback_query
                 # or update.callback_query and self.per_chat and not update.callback_query.message):
             return False
-        if not update.callback_query and Filters.group(update.effective_message):
+        if (self.per_user and    # TODO hack
+                not update.callback_query and Filters.group(update.effective_message)):
+            return False
+        if (self.per_chat and    # TODO hack
+                not update.callback_query and Filters.private(update.effective_message)):
             return False
 
         key = self._get_key(update)
@@ -284,7 +296,7 @@ class ConversationHandler(Handler):
     def handle_update(self, update, dispatcher):
         key = self.current_conversation
         if self._need_update_user_data.get(key):
-            dispatcher.user_data[key] = json.loads(self._state_in_database[key].data)
+            self.__get_user_data_dict(dispatcher)[key] = json.loads(self._state_in_database[key].data)
             del self._need_update_user_data[key]
         self._handle_update(update, dispatcher)
         visited = dict()
@@ -327,6 +339,14 @@ class ConversationHandler(Handler):
         if user:
             state_in_database.agitator = user
         state_in_database.state = self.conversations.get(key)
-        state_in_database.data = json.dumps(dispatcher.user_data.get(key))
+        state_in_database.data = json.dumps(self.__get_user_data_dict(dispatcher).get(key))
         state_in_database.save()
         self._state_in_database[key] = state_in_database
+
+    def __get_user_data_dict(self, dispatcher):
+        if self.per_user:
+            return dispatcher.user_data
+        elif self.per_chat:
+            return dispatcher.chat_data
+        else:
+            return dict()

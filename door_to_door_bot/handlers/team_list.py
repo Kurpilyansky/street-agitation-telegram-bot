@@ -43,7 +43,7 @@ def team_list_start(bot, update, user_data, region_id):
         text += 'Вы можете присоединиться к другому волонтеру или создать новую команду: \n%s' % ('\n'.join(teams_str))
     else:
         text += 'Вы можете создать новую команду'
-    send_message_text(bot, update, user_data, text,
+    send_message_text(bot, update, text, user_data=user_data,
                       reply_markup=InlineKeyboardMarkup(keyboard),
                       parse_mode='Markdown')
 
@@ -69,7 +69,7 @@ def create_new_team_start(bot, update, user_data):
            (team_opts['day'], team_opts['month'], team_opts['hour'], team_opts['minute'], team_opts['place'])
     keyboard = [[InlineKeyboardButton('Да', callback_data=YES),
                  InlineKeyboardButton('Нет', callback_data=NO)]]
-    send_message_text(bot, update, user_data, text, reply_markup=InlineKeyboardMarkup(keyboard))
+    send_message_text(bot, update, text, user_data=user_data, reply_markup=InlineKeyboardMarkup(keyboard))
 
 
 @region_decorator
@@ -100,7 +100,7 @@ def create_new_team___set_date_start(bot, update, user_data):
         text = (today + timedelta(days=i)).strftime("%d.%m")
         data = (today + timedelta(days=i)).strftime("%d.%m.%Y")
         buttons.append(InlineKeyboardButton(text, callback_data=data))
-    send_message_text(bot, update, user_data, 'Укажите дату', reply_markup=InlineKeyboardMarkup([buttons]))
+    send_message_text(bot, update, 'Укажите дату', user_data=user_data, reply_markup=InlineKeyboardMarkup([buttons]))
 
 
 def create_new_team__set_date_button(bot, update, user_data):
@@ -114,7 +114,7 @@ def create_new_team__set_date_button(bot, update, user_data):
 
 
 def create_new_team___set_time_start(bot, update, user_data):
-    send_message_text(bot, update, user_data, 'Укажите время начала в формате ЧЧ:ММ (например, 18:00)')
+    send_message_text(bot, update, 'Укажите время начала в формате ЧЧ:ММ (например, 18:00)', user_data=user_data)
 
 
 def create_new_team__set_time_text(bot, update, user_data):
@@ -126,7 +126,7 @@ def create_new_team__set_time_text(bot, update, user_data):
 
 
 def create_new_team___set_place_start(bot, update, user_data):
-    send_message_text(bot, update, user_data, 'Укажите краткое и понятное описание места')
+    send_message_text(bot, update, 'Укажите краткое и понятное описание места', user_data=user_data)
 
 
 def create_new_team__set_place_text(bot, update, user_data):
@@ -139,8 +139,9 @@ def join_team_start(bot, update, user_data):
     team = models.AgitationTeam.objects.get(id=team_id)
     keyboard = [[InlineKeyboardButton('Да', callback_data=YES),
                  InlineKeyboardButton('Нет', callback_data=NO)]]
-    send_message_text(bot, update, user_data,
+    send_message_text(bot, update,
                       'Вы уверены, что хотите присоединиться к %s?' % team.show(markdown=True),
+                      user_data=user_data,
                       parse_mode='Markdown',
                       reply_markup=InlineKeyboardMarkup(keyboard))
 

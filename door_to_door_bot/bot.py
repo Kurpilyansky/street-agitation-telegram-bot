@@ -19,7 +19,9 @@ from door_to_door_bot.bot_constants import *
 from street_agitation_bot.handlers import (ConversationHandler, EmptyHandler)
 import logging
 
-from door_to_door_bot.handlers import teams as teams_handlers
+from door_to_door_bot.handlers import team_list as teams_handlers
+from door_to_door_bot.handlers import admin_commands as admin_handlers
+from door_to_door_bot.handlers import agitation_process as agitation_process_handlers
 
 # Enable logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -29,8 +31,9 @@ logger = logging.getLogger(__name__)
 
 
 def register_user_start(bot, update, user_data):
-    send_message_text(bot, update, user_data,
+    send_message_text(bot, update,
                       'Здравствуйте! Пожалуйста, пройдите регистрацию, отправив свой контакт.',
+                      user_data=user_data,
                       reply_markup=ReplyKeyboardMarkup([[KeyboardButton('Зарегистрироваться', request_contact=True)]]))
 
 
@@ -45,7 +48,7 @@ def register_user(bot, update, user_data):
                 'last_name': contact.last_name,
                 'phone': contact.phone_number,
                 'telegram': user.username})
-    send_message_text(bot, update, user_data, 'Вы зарегистрированы!', reply_markup=ReplyKeyboardRemove())
+    send_message_text(bot, update, 'Вы зарегистрированы!', user_data=user_data, reply_markup=ReplyKeyboardRemove())
     return SELECT_REGION
 
 
@@ -100,8 +103,9 @@ def select_region_start(bot, update, user_data):
     if not user:
         return REGISTER_USER
     keyboard = _build_add_region_keyboard(update, user_data)
-    send_message_text(bot, update, user_data,
+    send_message_text(bot, update,
                       'Выберите региональный штаб',
+                      user_data=user_data,
                       reply_markup=InlineKeyboardMarkup(keyboard))
 
 
@@ -138,13 +142,16 @@ def show_menu(bot, update, user_data):
             keyboard.append([InlineKeyboardButton('Настройки штаба', callback_data=SHOW_REGION_SETTINGS)])
     else:
         return SELECT_REGION
-    send_message_text(bot, update, user_data, '*Меню*\nВыберите действие для продолжения работы', parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
+    send_message_text(bot, update, '*Меню*\nВыберите действие для продолжения работы',
+                      user_data=user_data,
+                      parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
 
 
 @has_admin_rights
 def make_broadcast_start(bot, update, user_data):
-    send_message_text(bot, update, user_data,
+    send_message_text(bot, update,
                       '*Отправьте сообщение, и оно будет отправлено всем пользователям*',
+                      user_data=user_data,
                       parse_mode='Markdown')
 
 
@@ -160,7 +167,7 @@ def make_broadcast_confirm(bot, update, user_data):
     text = 'Вы уверены, что хотите отправить *всем пользователям вашего региона* следующее сообщение:\n\n%s' % broadcast_text
     keyboard = [[InlineKeyboardButton('Отправить', callback_data=YES),
                  InlineKeyboardButton('Отмена', callback_data=NO)]]
-    send_message_text(bot, update, user_data, text,
+    send_message_text(bot, update, text, user_data=user_data,
                       parse_mode='Markdown',
                       reply_markup=InlineKeyboardMarkup(keyboard))
 
@@ -211,8 +218,7 @@ def show_region_settings_start(bot, update, user_data, region_id):
         text += '\n\n_Штаб скрыт от пользователей_'
         keyboard.append([InlineKeyboardButton('Показать штаб пользователям', callback_data=CHANGE_REGION_PUBLICITY)])
     keyboard.append([InlineKeyboardButton('<< Меню', callback_data=MENU)])
-    send_message_text(bot, update, user_data,
-                      text,
+    send_message_text(bot, update, text, user_data=user_data,
                       parse_mode='Markdown',
                       reply_markup=InlineKeyboardMarkup(keyboard))
 
@@ -232,8 +238,7 @@ def manage_admin_rights_start(bot, update, user_data, region_id):
                                               callback_data=DEL_ADMIN_RIGHTS + str(user.id))])
     keyboard.append([InlineKeyboardButton('Добавить админа', callback_data=ADD_ADMIN_RIGHTS)])
     keyboard.append([InlineKeyboardButton('<< Назад', callback_data=SHOW_REGION_SETTINGS)])
-    send_message_text(bot, update, user_data,
-                      text,
+    send_message_text(bot, update, text, user_data=user_data,
                       parse_mode='Markdown',
                       reply_markup=InlineKeyboardMarkup(keyboard))
 
@@ -263,8 +268,7 @@ def add_admin_rights_start(bot, update, user_data, region_id):
         return SHOW_REGION_SETTINGS
     text = 'Укажите нового админа'
     keyboard = [[InlineKeyboardButton('<< Назад', callback_data=MANAGE_ADMIN_RIGHTS)]]
-    send_message_text(bot, update, user_data,
-                      text,
+    send_message_text(bot, update, text, user_data=user_data,
                       parse_mode='Markdown',
                       reply_markup=InlineKeyboardMarkup(keyboard))
 
@@ -296,8 +300,7 @@ def change_region_publicity_start(bot, update, user_data, region_id):
                 'Если вы решите использовать бота в своем регионе, то покажите штаб пользователям.'
         keyboard.append([InlineKeyboardButton('Показать штаб пользователям', callback_data=YES)])
     keyboard.append([InlineKeyboardButton('<< Назад', callback_data=SHOW_REGION_SETTINGS)])
-    send_message_text(bot, update, user_data,
-                      text,
+    send_message_text(bot, update, text, user_data=user_data,
                       parse_mode='Markdown',
                       reply_markup=InlineKeyboardMarkup(keyboard))
 
@@ -347,6 +350,9 @@ def run_bot():
 
     # dp.add_handler(CommandHandler("start", start))
     dp.add_handler(CommandHandler("help", help))
+
+    admin_handlers.register(dp)
+    agitation_process_handlers.register(dp)
 
     standard_callback_query_handler = CallbackQueryHandler(standard_callback)
 

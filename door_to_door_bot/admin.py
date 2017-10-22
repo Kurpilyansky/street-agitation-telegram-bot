@@ -121,6 +121,7 @@ class AgitationTeamAdmin(VersionAdmin):
         'region',
         'start_time',
         'place',
+        'chat_id',
     )
     list_filter = (
         'region',

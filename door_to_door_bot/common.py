@@ -27,32 +27,38 @@ def has_admin_rights(func):
     return wrapper
 
 
-def send_message_text(bot, update, user_data, *args, **kwargs):
-    last_bot_message_ids = user_data.get('last_bot_message_id', None)
+def send_message_text(bot, update, *args, **kwargs):
+    if 'user_data' in kwargs:
+        data = kwargs.pop('user_data')
+        chat_id = update.effective_user.id
+    else:
+        data = kwargs.pop('chat_data')
+        chat_id = update.effective_chat.id
+    last_bot_message_ids = data.get('last_bot_message_id', None)
     if not last_bot_message_ids:
         last_bot_message_ids = []
     elif not isinstance(last_bot_message_ids, list):
         last_bot_message_ids = [last_bot_message_ids]
 
-    user_data.pop('last_bot_message_id', None)
-    user_data.pop('last_bot_message_ts', None)
+    data.pop('last_bot_message_id', None)
+    data.pop('last_bot_message_ts', None)
     location = kwargs.get('location', {})
     kwargs.pop('location', None)
     cur_ts = datetime.utcnow().timestamp()
     for message_id in last_bot_message_ids:
-        utils.safe_delete_message(bot, update.effective_user.id, message_id)
+        utils.safe_delete_message(bot, chat_id, message_id)
     new_message_ids = []
     if location:
         kwargs2 = kwargs.copy()
         if args:
             kwargs2.pop('reply_markup', None)
-        new_message = bot.send_location(update.effective_user.id, location['latitude'], location['longitude'], **kwargs2)
+        new_message = bot.send_location(chat_id, location['latitude'], location['longitude'], **kwargs2)
         new_message_ids.append(new_message.message_id)
     if args:
-        new_message = bot.send_message(update.effective_user.id, *args, **kwargs)
+        new_message = bot.send_message(chat_id, *args, **kwargs)
         new_message_ids.append(new_message.message_id)
-    user_data['last_bot_message_id'] = new_message_ids
-    user_data['last_bot_message_ts'] = cur_ts
+    data['last_bot_message_id'] = new_message_ids
+    data['last_bot_message_ts'] = cur_ts
 
 
 def standard_callback(bot, update):

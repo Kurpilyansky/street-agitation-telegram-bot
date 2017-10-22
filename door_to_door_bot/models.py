@@ -248,6 +248,7 @@ class AgitationTeam(models.Model):
     start_time = models.DateTimeField()
     place = models.CharField(max_length=500)
     agitators = models.ManyToManyField(User)
+    chat_id = models.IntegerField(null=True, blank=True, unique=True)
 
     def is_full(self):
         return self.agitators.count() > 1
