@@ -1,4 +1,9 @@
+
+from django.db.models import Q
+
 import re
+
+from datetime import datetime, timedelta
 
 from django.db import transaction
 
@@ -17,6 +22,7 @@ from door_to_door_bot.bot_constants import *
 CLEAR_FILTER = 'CLEAR_FILTER'
 ADD_NEW_OBJECT = 'ADD_NEW_OBJECT'
 RETURN_TO_BACK = 'RETURN_TO_BACK'
+SET_FLAT_CONTACT_STATUS = 'SET_FLAT_CONTACT_STATUS'
 
 MENU = 'MENU'
 CHOOSE_STREET = 'CHOOSE_STREET'
@@ -270,13 +276,15 @@ class StreetCreator(object):
 
     def get_handlers(self):
         return {ADD_STREET: [EmptyHandler(self._handle_start, pass_chat_data=True),
-                             MessageHandler(Filters.text, team_decorator(self._handle_text), pass_chat_data=True)]}
+                             MessageHandler(Filters.text, team_decorator(self._handle_text), pass_chat_data=True),
+                             standard_callback_query_handler]}
 
     def _handle_start(self, bot, update, chat_data):
         send_message_text(bot, update, 'Укажите название добавляемой улицы/проспекта/переулка. '
                                        'Используйте сокращения ул., пр., пер. и другие. '
                                        'Например, *Вознесенский пр.* или *ул. Мира*',
                           chat_data=chat_data,
+                          reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('<< Назад', callback_data=CHOOSE_STREET)]]),
                           parse_mode='Markdown')
 
     def _handle_text(self, bot, update, chat_data, team):
@@ -293,7 +301,8 @@ class HouseCreator(object):
 
     def get_handlers(self):
         return {ADD_HOUSE: [EmptyHandler(self._handle_start, pass_chat_data=True),
-                            MessageHandler(Filters.text, self._handle_text, pass_chat_data=True)]}
+                            MessageHandler(Filters.text, self._handle_text, pass_chat_data=True),
+                            standard_callback_query_handler]}
 
     def _handle_start(self, bot, update, chat_data):
         street = models.Street.objects.get(id=chat_data['street_id'])
@@ -301,6 +310,7 @@ class HouseCreator(object):
                                        'Только номер, без слов "дом" и "д.". '
                                        'Например, 17, 16a, 22к1, 6стр1, 20/3.' % street.show(),
                           chat_data=chat_data,
+                          reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('<< Назад', callback_data=CHOOSE_HOUSE)]]),
                           parse_mode='Markdown')
 
     def _handle_text(self, bot, update, chat_data):
@@ -317,13 +327,15 @@ class HouseBlockCreator(object):
 
     def get_handlers(self):
         return {ADD_HOUSE_BLOCK: [EmptyHandler(self._handle_start, pass_chat_data=True),
-                                  MessageHandler(Filters.text, self._handle_text, pass_chat_data=True)]}
+                                  MessageHandler(Filters.text, self._handle_text, pass_chat_data=True),
+                                  standard_callback_query_handler]}
 
     def _handle_start(self, bot, update, chat_data):
         house = models.House.objects.select_related('street').get(id=chat_data['house_id'])
         send_message_text(bot, update, 'Укажите номер добавляемого подъезда в %s.\n'
                                        'Только номер, без символов #, № и др.' % house.show(),
                           chat_data=chat_data,
+                          reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('<< Назад', callback_data=CHOOSE_HOUSE_BLOCK)]]),
                           parse_mode='Markdown')
 
     def _handle_text(self, bot, update, chat_data):
@@ -340,7 +352,8 @@ class FlatCreator(object):
 
     def get_handlers(self):
         return {ADD_FLAT: [EmptyHandler(self._handle_start, pass_chat_data=True),
-                           MessageHandler(Filters.text, self._handle_text, pass_chat_data=True)]}
+                           MessageHandler(Filters.text, self._handle_text, pass_chat_data=True),
+                           standard_callback_query_handler]}
 
     def _handle_start(self, bot, update, chat_data):
         house_block = models.HouseBlock.objects.select_related('house', 'house__street')\
@@ -349,6 +362,7 @@ class FlatCreator(object):
                                        'Укажите номер квартиры, или диапозон квартир.\n'
                                        'Например, *64* или *73-144*.' % house_block.show(),
                           chat_data=chat_data,
+                          reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('<< Назад', callback_data=CHOOSE_FLAT)]]),
                           parse_mode='Markdown')
 
     def _handle_text(self, bot, update, chat_data):
@@ -375,6 +389,73 @@ class FlatCreator(object):
                 return CHOOSE_FLAT
 
 
+class FlatContactor(object):
+    def __init__(self):
+        pass
+
+    def get_handlers(self):
+        return {CONTACT_FLAT: [EmptyHandler(team_decorator(self._handle_start), pass_chat_data=True),
+                               CallbackQueryHandler(team_decorator(self._handle_button), pass_chat_data=True)]}
+
+    def _handle_start(self, bot, update, chat_data, team):
+        flat = models.Flat.objects.get(id=chat_data['flat_id'])
+        my_flat_contact = models.FlatContact.objects.filter(team_id=team.id, flat_id=flat.id).first()
+        another_flat_contact = None
+        if not my_flat_contact:
+            another_flat_contact = models.FlatContact.objects.filter(flat_id=flat.id) \
+               .filter(Q(status__isnull=False) | ~Q(status=models.FlatContact.Status.NONE)).first()
+            if not another_flat_contact and True:   # TODO
+                my_flat_contact = models.FlatContact(flat=flat,
+                                                     team=team,
+                                                     start_time=datetime.now())
+                my_flat_contact.save()
+
+        keyboard = []
+        if another_flat_contact:
+            text = '%s\nКто-то из волонтеров уже контактировал с этой квартирой' % flat.show()
+            keyboard.append([InlineKeyboardButton('<< Назад', callback_data=BACK)])
+        elif not my_flat_contact:
+            text = flat.show()
+            keyboard.append([InlineKeyboardButton('<< Назад', callback_data=BACK)])
+        elif my_flat_contact.status is not None:
+            text = my_flat_contact.show()
+            keyboard.append([InlineKeyboardButton('<< Назад', callback_data=BACK)])
+        else:
+            text = my_flat_contact.show()
+            for status in models.FlatContact.Status.choices:
+                data = '%s_%d' % (SET_FLAT_CONTACT_STATUS, status[0])
+                keyboard.append([InlineKeyboardButton(status[1], callback_data=data)])
+            keyboard.append([InlineKeyboardButton('-- Отмена --', callback_data=CANCEL)])
+        send_message_text(bot, update, text,
+                          chat_data=chat_data,
+                          reply_markup=InlineKeyboardMarkup(keyboard),
+                          parse_mode='Markdown')
+
+    def _handle_button(self, bot, update, chat_data, team):
+        query = update.callback_query
+        query.answer()
+        if query.data == BACK:
+            return CHOOSE_FLAT
+        elif query.data == CANCEL:
+            models.FlatContact.objects \
+                .filter(team_id=team.id,
+                        flat_id=chat_data['flat_id']
+                        ).delete()
+            return CHOOSE_FLAT
+        else:
+            match = re.match('%s_(\d+)' % SET_FLAT_CONTACT_STATUS, query.data)
+            if match:
+                flat_contact = models.FlatContact.objects\
+                                     .filter(team_id=team.id,
+                                             flat_id=chat_data['flat_id']
+                                             )\
+                                     .first()
+                flat_contact.status = int(match.group(1))
+                flat_contact.end_time = datetime.now()
+                flat_contact.save()
+                return CHOOSE_FLAT
+
+
 def register(dp):
     states_handlers = {
         MENU: [EmptyHandler(show_menu, pass_chat_data=True), standard_callback_query_handler],
@@ -387,6 +468,7 @@ def register(dp):
     states_handlers.update(HouseBlockCreator().get_handlers())
     states_handlers.update(FlatSelector().get_handlers())
     states_handlers.update(FlatCreator().get_handlers())
+    states_handlers.update(FlatContactor().get_handlers())
     conv_handler = ConversationHandler(
         per_user=False,
         per_chat=True,

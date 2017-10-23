@@ -194,6 +194,24 @@ class FlatAdmin(VersionAdmin):
     )
 
 
+class FlatContactAdmin(VersionAdmin):
+    list_display = (
+        'flat',
+        'team',
+        'status',
+        'start_time',
+        'end_time',
+    )
+    list_filter = (
+        'team__region',
+        'status',
+    )
+    search_fields = (
+        '=flat_id',
+        '=team_id',
+    )
+
+
 admin.site.register(models.Region, RegionAdmin)
 admin.site.register(models.RegionSettings, RegionSettingsAdmin)
 admin.site.register(models.User, UserAdmin)
@@ -205,3 +223,4 @@ admin.site.register(models.Street, StreetAdmin)
 admin.site.register(models.House, HouseAdmin)
 admin.site.register(models.HouseBlock, HouseBlockAdmin)
 admin.site.register(models.Flat, FlatAdmin)
+admin.site.register(models.FlatContact, FlatContactAdmin)

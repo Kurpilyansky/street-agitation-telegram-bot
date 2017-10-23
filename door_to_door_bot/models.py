@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 
+import djchoices
+
 from django.db.models import Q
 from django.db import transaction
 
@@ -33,6 +35,12 @@ class Region(models.Model):
 
     def __str__(self):
         return self.name
+
+    def convert_to_local_time(self, date):
+        return date + timedelta(seconds=self.timezone_delta)
+
+    def convert_from_local_time(self, date):
+        return date - timedelta(seconds=self.timezone_delta)
 
     class Meta:
         ordering = ('name',)
@@ -116,16 +124,11 @@ class User(models.Model):
     def find_by_telegram_id(cls, id):
         return cls.objects.filter(telegram_id=id).first()
 
-    def show_full(self):
-        if not self.telegram_id:
-            return utils.escape_markdown('%s %s' % (self.full_name, self.phone))
-        elif self.telegram:
-            return utils.escape_markdown('%s @%s %s' % (self.full_name, self.telegram, self.phone))
-        else:
-            return utils.escape_markdown('@%s (%s) %s' % (self.telegram_id, self.full_name, self.phone))
-
     def __str__(self):
-        return '@%s (%s) @%s' % (self.telegram_id, self.full_name, self.telegram)
+        if self.telegram:
+            return '@%s' % self.telegram
+        else:
+            return 'tg:%s (%s)' % (self.telegram_id, self.full_name)
 
 
 class AdminRights(models.Model):
@@ -290,14 +293,40 @@ class AgitationTeam(models.Model):
         return self.agitators.count() > 1
 
     def show(self, markdown=True):
-        diff = timedelta(seconds=self.region.timezone_delta)
-        datetime_str = (self.start_time + diff).strftime("%d.%m %H:%M")
+        datetime_str = self.region.convert_to_local_time(self.start_time).strftime("%d.%m %H:%M")
         place = utils.escape_markdown(self.place) if markdown else self.place
         agitators_str = ' '.join(map(lambda a: a.show(markdown), self.agitators.all()))
         return '%s %s %s' % (datetime_str, place, agitators_str)
 
+    def __str__(self):
+        return '%s %s' % (self.place, ','.join(map(str, self.agitators.all())))
+
 
 class FlatContact(models.Model):
-    flat = models.ForeignKey(Flat)
-    team = models.ForeignKey(AgitationTeam)
-    date = models.DateTimeField()
+    class Status(djchoices.DjangoChoices):
+        NONE = djchoices.ChoiceItem(0, 'Нет дома')
+        POSITIVE = djchoices.ChoiceItem(1, 'Позитив')
+        NEGATIVE = djchoices.ChoiceItem(2, 'Негатив')
+        NEUTRAL = djchoices.ChoiceItem(3, 'Нейтрально')
+
+    flat = models.ForeignKey(Flat, related_name='contacts')
+    team = models.ForeignKey(AgitationTeam, related_name='contacts')
+    start_time = models.DateTimeField(null=True, blank=True)
+    end_time = models.DateTimeField(null=True, blank=True)
+    status = models.IntegerField(choices=Status.choices, validators=[Status.validator], null=True, blank=True)
+
+    def show(self, markdown=True):
+        lines = [self.flat.show(markdown),
+                 self.team.show(markdown),
+                 'Время начала: %s' % self.team.region
+                     .convert_to_local_time(self.start_time)
+                     .strftime('%d.%m %H:%M:%S')]
+        if self.end_time is not None:
+            seconds = (self.end_time - self.start_time).total_seconds()
+            lines.append('Время контакта: %d:%02d' % (seconds / 60, seconds % 60))
+        if self.status is not None:
+            lines.append('Результат: %s' % self.Status.get_choice(self.status).label)
+        return '\n'.join(lines)
+
+    class Meta:
+        unique_together = ('flat', 'team')

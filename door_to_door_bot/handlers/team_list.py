@@ -79,12 +79,13 @@ def create_new_team_button(bot, update, user_data, region_id):
     if query.data == YES:
         region = models.Region.get_by_id(region_id)
         team_opts = user_data['team']
+        start_time = datetime(year=team_opts['year'],
+                              month=team_opts['month'],
+                              day=team_opts['day'],
+                              hour=team_opts['hour'],
+                              minute=team_opts['minute'])
         team = models.AgitationTeam(region_id=region_id,
-                                    start_time=datetime(year=team_opts['year'],
-                                                        month=team_opts['month'],
-                                                        day=team_opts['day'],
-                                                        hour=team_opts['hour'])
-                                               - timedelta(seconds=region.timezone_delta),
+                                    start_time=region.convert_from_local_time(start_time),
                                     place=team_opts['place'])
         team.save()
         user = models.User.find_by_telegram_id(update.effective_user.id)
