@@ -33,6 +33,7 @@ ADD_HOUSE_BLOCK = 'ADD_HOUSE_BLOCK'
 CHOOSE_FLAT = 'CHOOSE_FLAT'
 ADD_FLAT = 'ADD_FLAT'
 CONTACT_FLAT = 'CONTACT_FLAT'
+SHOW_CONTACTS_HISTORY = 'SHOW_CONTACTS_HISTORY'
 
 
 def team_decorator(func):
@@ -53,6 +54,7 @@ def team_decorator(func):
 @team_decorator
 def show_menu(bot, update, user_data, team):
     keyboard = [[InlineKeyboardButton('Выбрать улицу', callback_data=CHOOSE_STREET)],
+                [InlineKeyboardButton('История обхода', callback_data=SHOW_CONTACTS_HISTORY)],
                 [InlineKeyboardButton('<< Главное меню', callback_data=END_AGITATION_PROCESS)]]
     send_message_text(bot, update,
                       team.show(markdown=True),
@@ -74,6 +76,7 @@ class ObjectSelector(object):
     _prev_state_name = ''
     _next_state_name = ''
     _add_state_name = ''
+    _can_filter = False
     _keyboard_size = (1, 5)
 
     def __init__(self):
@@ -118,9 +121,11 @@ class ObjectSelector(object):
         return self._keyboard_size[0] * self._keyboard_size[1]
 
     def get_handlers(self):
-        return {self._state_name: [EmptyHandler(self._handle_start, pass_user_data=True),
-                                   CallbackQueryHandler(self._handle_button, pass_user_data=True),
-                                   MessageHandler(Filters.text, self._handle_text, pass_user_data=True)]}
+        handlers = [EmptyHandler(self._handle_start, pass_user_data=True),
+                    CallbackQueryHandler(self._handle_button, pass_user_data=True)]
+        if self._can_filter:
+            handlers.append(MessageHandler(Filters.text, self._handle_text, pass_user_data=True))
+        return {self._state_name: handlers}
 
     def _handle_start(self, bot, update, user_data):
         query_set = self._get_query_set(user_data)
@@ -140,13 +145,17 @@ class ObjectSelector(object):
         if pattern:
             keyboard.append([InlineKeyboardButton('-- Сбросить фильтр "%s" --' % pattern,
                                                   callback_data=CLEAR_FILTER)])
-        keyboard.append([InlineKeyboardButton('+', callback_data=ADD_NEW_OBJECT)])
+        if self._add_state_name:
+            keyboard.append([InlineKeyboardButton('+', callback_data=ADD_NEW_OBJECT)])
         keyboard.append([InlineKeyboardButton('<< Назад', callback_data=RETURN_TO_BACK)])
 
+        text = self._get_text(user_data)
+        if self._can_filter:
+            text += '\nВы можете сузить выбор, отправив сообщение с названием или его частью.'
+        if self._add_state_name:
+            text += '\nЕсли не получается найти нужный вам объект, можете его добавить, нажав на *+*.'
         send_message_text(bot, update,
-                          self._get_text(user_data) +
-                          '\nВы можете сузить выбор, отправив сообщение с названием или его частью.'
-                          '\nЕсли не получается найти нужный вам объект, можете его добавить, нажав на *+*.',
+                          text,
                           user_data=user_data,
                           parse_mode='Markdown',
                           reply_markup=InlineKeyboardMarkup(keyboard))
@@ -173,8 +182,11 @@ class ObjectSelector(object):
         else:
             match = re.match('\d+', query.data)
             if match:
-                user_data[self._field_name + '_id'] = int(query.data)
-                return self._next_state_name
+                return self._handle_select_object(user_data, int(query.data))
+
+    def _handle_select_object(self, user_data, object_id):
+        user_data[self._field_name + '_id'] = object_id
+        return self._next_state_name
 
     def _handle_text(self, bot, update, user_data):
         self._set_pattern(user_data, update.message.text)
@@ -186,6 +198,7 @@ class StreetSelector(ObjectSelector):
     _state_name = CHOOSE_STREET
     _next_state_name = CHOOSE_HOUSE
     _add_state_name = ADD_STREET
+    _can_filter = True
 
     def _get_query_set(self, user_data):
         streets_set = models.Street.objects
@@ -204,6 +217,7 @@ class HouseSelector(ObjectSelector):
     _state_name = CHOOSE_HOUSE
     _next_state_name = CHOOSE_HOUSE_BLOCK
     _add_state_name = ADD_HOUSE
+    _can_filter = True
     _keyboard_size = (4, 4)
 
     def _get_query_set(self, user_data):
@@ -224,6 +238,7 @@ class HouseBlockSelector(ObjectSelector):
     _state_name = CHOOSE_HOUSE_BLOCK
     _next_state_name = CHOOSE_FLAT
     _add_state_name = ADD_HOUSE_BLOCK
+    _can_filter = True
     _keyboard_size = (4, 4)
 
     def _get_query_set(self, user_data):
@@ -244,6 +259,7 @@ class FlatSelector(ObjectSelector):
     _state_name = CHOOSE_FLAT
     _next_state_name = CONTACT_FLAT
     _add_state_name = ADD_FLAT
+    _can_filter = True
     _keyboard_size = (3, 4)
 
     def _get_query_set(self, user_data):
@@ -259,6 +275,44 @@ class FlatSelector(ObjectSelector):
                              .select_related('house', 'house__street')
                              .get(id=user_data['house_block_id']))
         return 'Выберите *квартиру* в %s' % house_block.show()
+
+
+class ContactsHistoryShower(ObjectSelector):
+    _field_name = 'flat_contact'
+    _prev_state_name = MENU
+    _state_name = SHOW_CONTACTS_HISTORY
+    _next_state_name = CONTACT_FLAT
+    _can_filter = False
+    _keyboard_size = (1, 7)
+
+    def _get_query_set(self, user_data):
+        contacts_set = models.FlatContact.objects\
+                             .filter(team_id=user_data['cur_team_id'])\
+                             .order_by('start_time')
+        return contacts_set.all()
+
+    def _get_text(self, user_data):
+        return '*История агитации*'
+
+    def _handle_select_object(self, user_data, object_id):
+        flat_contact = models.FlatContact.objects\
+                             .filter(id=object_id)\
+                             .select_related('flat',
+                                             'flat__house_block',
+                                             'flat__house_block__house',
+                                             'flat__house_block__house__street')\
+                             .first()
+        if flat_contact:
+            self._clear_data(user_data)
+            flat = flat_contact.flat
+            user_data['flat_id'] = flat.id
+            house_block = flat.house_block
+            user_data['house_block_id'] = house_block.id
+            house = house_block.house
+            user_data['house_id'] = house.id
+            street = house.street
+            user_data['street_id'] = street.id
+            return CONTACT_FLAT
 
 
 class StreetCreator(object):
@@ -462,3 +516,4 @@ state_handlers.update(HouseBlockCreator().get_handlers())
 state_handlers.update(FlatSelector().get_handlers())
 state_handlers.update(FlatCreator().get_handlers())
 state_handlers.update(FlatContactor().get_handlers())
+state_handlers.update(ContactsHistoryShower().get_handlers())

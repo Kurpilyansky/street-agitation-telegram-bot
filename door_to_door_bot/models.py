@@ -316,7 +316,7 @@ class FlatContact(models.Model):
     status = models.IntegerField(choices=Status.choices, validators=[Status.validator], null=True, blank=True)
     created_by = models.ForeignKey(User, null=True, blank=True, related_name='created_contacts')
 
-    def show(self, markdown=True):
+    def show(self, markdown=True, full=True):
         lines = [self.flat.show(markdown),
                  self.team.show(markdown),
                  'Время начала: %s' % self.team.region
