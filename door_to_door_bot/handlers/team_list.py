@@ -135,12 +135,16 @@ def create_new_team___set_date_start(bot, update, user_data):
         text = (today + timedelta(days=i)).strftime("%d.%m")
         data = (today + timedelta(days=i)).strftime("%d.%m.%Y")
         buttons.append(InlineKeyboardButton(text, callback_data=data))
-    send_message_text(bot, update, 'Укажите дату', user_data=user_data, reply_markup=InlineKeyboardMarkup([buttons]))
+    keyboard = [buttons, [InlineKeyboardButton('<< Назад', callback_data=BACK)]]
+    send_message_text(bot, update, 'Укажите дату', user_data=user_data, reply_markup=InlineKeyboardMarkup(keyboard))
 
 
 def create_new_team__set_date_button(bot, update, user_data):
     query = update.callback_query
     query.answer()
+    if query.data == BACK:
+        del user_data['team']
+        return SHOW_TEAM_LIST
     day, month, year = map(int, query.data.split('.'))
     user_data['team']['day'] = day
     user_data['team']['month'] = month
@@ -149,7 +153,10 @@ def create_new_team__set_date_button(bot, update, user_data):
 
 
 def create_new_team___set_time_start(bot, update, user_data):
-    send_message_text(bot, update, 'Укажите время начала в формате ЧЧ:ММ (например, 18:00)', user_data=user_data)
+    keyboard = [[InlineKeyboardButton('<< Назад', callback_data=CREATE_NEW_TEAM__SET_DATE)]]
+    send_message_text(bot, update, 'Укажите время начала в формате ЧЧ:ММ (например, 18:00)',
+                      user_data=user_data,
+                      reply_markup=InlineKeyboardMarkup(keyboard))
 
 
 def create_new_team__set_time_text(bot, update, user_data):
@@ -161,7 +168,10 @@ def create_new_team__set_time_text(bot, update, user_data):
 
 
 def create_new_team___set_place_start(bot, update, user_data):
-    send_message_text(bot, update, 'Укажите краткое и понятное описание места', user_data=user_data)
+    keyboard = [[InlineKeyboardButton('<< Назад', callback_data=CREATE_NEW_TEAM__SET_TIME)]]
+    send_message_text(bot, update, 'Укажите краткое и понятное описание места',
+                      user_data=user_data,
+                      reply_markup=InlineKeyboardMarkup(keyboard))
 
 
 def create_new_team__set_place_text(bot, update, user_data):
@@ -202,9 +212,11 @@ state_handlers = {
     CREATE_NEW_TEAM__SET_DATE: [EmptyHandler(create_new_team___set_date_start, pass_user_data=True),
                                 CallbackQueryHandler(create_new_team__set_date_button, pass_user_data=True)],
     CREATE_NEW_TEAM__SET_TIME: [EmptyHandler(create_new_team___set_time_start, pass_user_data=True),
-                                MessageHandler(Filters.text, create_new_team__set_time_text, pass_user_data=True)],
+                                MessageHandler(Filters.text, create_new_team__set_time_text, pass_user_data=True),
+                                standard_callback_query_handler],
     CREATE_NEW_TEAM__SET_PLACE: [EmptyHandler(create_new_team___set_place_start, pass_user_data=True),
-                                 MessageHandler(Filters.text, create_new_team__set_place_text, pass_user_data=True)],
+                                 MessageHandler(Filters.text, create_new_team__set_place_text, pass_user_data=True),
+                                 standard_callback_query_handler],
     JOIN_TEAM: [EmptyHandler(join_team_start, pass_user_data=True),
                 CallbackQueryHandler(join_team_button, pass_user_data=True)],
     START_AGITATION_PROCESS: [EmptyHandler(start_agitation_process_start, pass_user_data=True),
