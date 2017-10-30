@@ -305,9 +305,10 @@ class AgitationTeam(models.Model):
 class FlatContact(models.Model):
     class Status(djchoices.DjangoChoices):
         NONE = djchoices.ChoiceItem(0, 'Нет дома')
-        POSITIVE = djchoices.ChoiceItem(1, 'Позитив')
-        NEGATIVE = djchoices.ChoiceItem(2, 'Негатив')
-        NEUTRAL = djchoices.ChoiceItem(3, 'Нейтрально')
+        CLOSE_NEGATIVE = djchoices.ChoiceItem(1, 'Не открыли - отказ')
+        OPEN_NEGATIVE = djchoices.ChoiceItem(2, 'Открыли - отказ')
+        POSITIVE = djchoices.ChoiceItem(3, 'Открыли - сторонник')
+        AGGRESSIVE = djchoices.ChoiceItem(4, 'Агрессия')
 
     flat = models.ForeignKey(Flat, related_name='contacts')
     team = models.ForeignKey(AgitationTeam, related_name='contacts')
