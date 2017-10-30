@@ -128,9 +128,11 @@ def create_new_team_button(bot, update, user_data, region_id):
     return MENU
 
 
-def create_new_team___set_date_start(bot, update, user_data):
+@region_decorator
+def create_new_team___set_date_start(bot, update, user_data, region_id):
+    region = models.Region.get_by_id(region_id)
+    today = region.convert_to_local_time(datetime.now()).date()
     buttons = []
-    today = date.today()
     for i in range(3):
         text = (today + timedelta(days=i)).strftime("%d.%m")
         data = (today + timedelta(days=i)).strftime("%d.%m.%Y")
