@@ -396,9 +396,11 @@ class FlatContactor(object):
             another_flat_contact = models.FlatContact.objects.filter(flat_id=flat.id) \
                .filter(Q(status__isnull=False) | ~Q(status=models.FlatContact.Status.NONE)).first()
             if not another_flat_contact and True:   # TODO
+                user = models.User.find_by_telegram_id(update.effective_user.id)
                 my_flat_contact = models.FlatContact(flat=flat,
                                                      team=team,
-                                                     start_time=datetime.now())
+                                                     start_time=datetime.now(),
+                                                     created_by=user)
                 my_flat_contact.save()
 
         keyboard = []

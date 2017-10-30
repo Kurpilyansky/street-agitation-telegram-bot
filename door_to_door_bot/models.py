@@ -314,6 +314,7 @@ class FlatContact(models.Model):
     start_time = models.DateTimeField(null=True, blank=True)
     end_time = models.DateTimeField(null=True, blank=True)
     status = models.IntegerField(choices=Status.choices, validators=[Status.validator], null=True, blank=True)
+    created_by = models.ForeignKey(User, null=True, blank=True, related_name='created_contacts')
 
     def show(self, markdown=True):
         lines = [self.flat.show(markdown),
@@ -327,6 +328,9 @@ class FlatContact(models.Model):
         if self.status is not None:
             lines.append('Результат: %s' % self.Status.get_choice(self.status).label)
         return '\n'.join(lines)
+
+    def __str__(self):
+        return self.show(markdown=False)
 
     class Meta:
         unique_together = ('flat', 'team')
