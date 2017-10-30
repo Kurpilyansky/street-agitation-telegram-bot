@@ -295,7 +295,7 @@ class AgitationTeam(models.Model):
     def show(self, markdown=True):
         datetime_str = self.region.convert_to_local_time(self.start_time).strftime("%d.%m %H:%M")
         place = utils.escape_markdown(self.place) if markdown else self.place
-        agitators_str = ' '.join(map(lambda a: a.show(markdown), self.agitators.all()))
+        agitators_str = ', '.join(map(lambda a: a.show(markdown), self.agitators.all()))
         return '%s %s %s' % (datetime_str, place, agitators_str)
 
     def __str__(self):

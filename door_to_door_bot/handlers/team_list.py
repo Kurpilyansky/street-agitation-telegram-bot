@@ -17,6 +17,37 @@ from datetime import date, timedelta
 
 
 @region_decorator
+def start_agitation_process_start(bot, update, user_data, region_id):
+    user_telegram_id = update.effective_user.id
+    my_teams = list(models.AgitationTeam
+                          .objects
+                          .filter(region_id=region_id,
+                                  start_time__gte=date.today())
+                          .filter(agitators__telegram_id=user_telegram_id)
+                          .order_by('start_time')
+                          .all())
+    keyboard = []
+    for team in my_teams:
+        keyboard.append([InlineKeyboardButton(team.show(markdown=False), callback_data=str(team.id))])
+    keyboard.append([InlineKeyboardButton('<< Назад', callback_data=BACK)])
+    send_message_text(bot, update, 'Выберите команду для обхода',
+                      user_data=user_data,
+                      reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+def start_agitation_process_button(bot, update, user_data):
+    query = update.callback_query
+    query.answer()
+    if query.data == BACK:
+        return MENU
+    else:
+        match = re.match('\d+', query.data)
+        if bool(match):
+            user_data['cur_team_id'] = int(query.data)
+            return MENU
+
+
+@region_decorator
 def team_list_start(bot, update, user_data, region_id):
     user_telegram_id = update.effective_user.id
     teams = list(models.AgitationTeam
@@ -36,6 +67,7 @@ def team_list_start(bot, update, user_data, region_id):
             if not team.agitators.filter(telegram_id=user_telegram_id).exists():
                 keyboard.append([InlineKeyboardButton(team.show(markdown=False), callback_data=str(team.id))])
     keyboard.append([InlineKeyboardButton('Создать новую команду', callback_data=NEW)])
+    keyboard.append([InlineKeyboardButton('<< Меню', callback_data=MENU)])
     text = ''
     if full_teams_str:
         text += '%d команд уже сформировано целиком\n' % len(full_teams_str)
@@ -51,12 +83,14 @@ def team_list_start(bot, update, user_data, region_id):
 def team_list_button(bot, update, user_data):
     query = update.callback_query
     query.answer()
+    if query.data in [MENU]:
+        return query.data
     if query.data == NEW:
         return CREATE_NEW_TEAM
     else:
         match = re.match('\d+', query.data)
         if bool(match):
-            user_data['team_id'] = int(query.data)
+            user_data['join_to_team_id'] = int(query.data)
             return JOIN_TEAM
 
 
@@ -136,7 +170,7 @@ def create_new_team__set_place_text(bot, update, user_data):
 
 
 def join_team_start(bot, update, user_data):
-    team_id = user_data['team_id']
+    team_id = user_data['join_to_team_id']
     team = models.AgitationTeam.objects.get(id=team_id)
     keyboard = [[InlineKeyboardButton('Да', callback_data=YES),
                  InlineKeyboardButton('Нет', callback_data=NO)]]
@@ -150,8 +184,8 @@ def join_team_start(bot, update, user_data):
 def join_team_button(bot, update, user_data):
     query = update.callback_query
     query.answer()
-    team_id = user_data['team_id']
-    del user_data['team_id']
+    team_id = user_data['join_to_team_id']
+    del user_data['join_to_team_id']
     if query.data == YES:
         team = models.AgitationTeam.objects.get(id=team_id)
         user = models.User.find_by_telegram_id(update.effective_user.id)
@@ -173,4 +207,6 @@ state_handlers = {
                                  MessageHandler(Filters.text, create_new_team__set_place_text, pass_user_data=True)],
     JOIN_TEAM: [EmptyHandler(join_team_start, pass_user_data=True),
                 CallbackQueryHandler(join_team_button, pass_user_data=True)],
+    START_AGITATION_PROCESS: [EmptyHandler(start_agitation_process_start, pass_user_data=True),
+                              CallbackQueryHandler(start_agitation_process_button, pass_user_data=True)]
 }

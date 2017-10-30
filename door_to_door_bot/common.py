@@ -87,7 +87,7 @@ def clear_user_data(user_data, keep_keys=None):
 
 
 def cancel(bot, update, user_data):
-    clear_user_data(user_data, ['last_bot_message_id', 'last_bot_message_ts', 'region_id'])
+    clear_user_data(user_data, ['last_bot_message_id', 'last_bot_message_ts', 'region_id', 'cur_team_id'])
     return start(bot, update)
 
 

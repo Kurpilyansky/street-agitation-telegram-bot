@@ -128,7 +128,9 @@ def select_region_button(bot, update, user_data):
 
 def show_menu(bot, update, user_data):
     keyboard = list()
-    if 'region_id' in user_data:
+    if 'region_id' not in user_data:
+        return SELECT_REGION
+    elif 'cur_team_id' not in user_data:
         region_id = user_data['region_id']
         region = models.Region.get_by_id(region_id)
         user_telegram_id = update.effective_user.id
@@ -137,14 +139,15 @@ def show_menu(bot, update, user_data):
         if not abilities:
             models.AgitatorInRegion.save_abilities(region.id, user, {})
         keyboard.append([InlineKeyboardButton('Записаться', callback_data=SHOW_TEAM_LIST)])
+        keyboard.append([InlineKeyboardButton('Начать обход', callback_data=START_AGITATION_PROCESS)])
         if models.AdminRights.has_admin_rights(user_telegram_id, region_id):
             keyboard.append([InlineKeyboardButton('Сделать рассылку', callback_data=MAKE_BROADCAST)])
             keyboard.append([InlineKeyboardButton('Настройки штаба', callback_data=SHOW_REGION_SETTINGS)])
+        send_message_text(bot, update, '*Меню*\nВыберите действие для продолжения работы',
+                          user_data=user_data,
+                          parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
     else:
-        return SELECT_REGION
-    send_message_text(bot, update, '*Меню*\nВыберите действие для продолжения работы',
-                      user_data=user_data,
-                      parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
+        return agitation_process_handlers.show_menu(bot, update, user_data)
 
 
 @has_admin_rights
@@ -352,7 +355,6 @@ def run_bot():
     dp.add_handler(CommandHandler("help", help))
 
     admin_handlers.register(dp)
-    agitation_process_handlers.register(dp)
 
     states_handlers = {
             REGISTER_USER: [EmptyHandler(register_user_start, pass_user_data=True),
@@ -376,6 +378,7 @@ def run_bot():
                                       CallbackQueryHandler(change_region_publicity_button, pass_user_data=True)],
         }
     states_handlers.update(teams_handlers.state_handlers)
+    states_handlers.update(agitation_process_handlers.state_handlers)
 
     conv_handler = ConversationHandler(
         user_model=models.User,
