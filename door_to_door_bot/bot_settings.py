@@ -3,7 +3,10 @@ BOT_TOKEN = "BOT_TOKEN"
 
 BOT_USERNAME = 'Bot'
 
-admin_telegram_user_ids = [12211357]
+TELEGRAM_CLI_HOSTNAME = 'localhost'
+TELEGRAM_CLI_PORT = 2390
+
+admin_telegram_user_ids = [12211357, 425776827]
 
 
 def is_admin_user_id(user_id):

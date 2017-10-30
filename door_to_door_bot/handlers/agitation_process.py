@@ -481,4 +481,4 @@ def register(dp):
         fallbacks=[CommandHandler('menu', cancel, pass_chat_data=True),
                    CommandHandler('cancel', cancel, pass_chat_data=True)]
     )
-    dp.add_handler(conv_handler)
+    # dp.add_handler(conv_handler)
