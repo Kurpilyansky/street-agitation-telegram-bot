@@ -201,7 +201,7 @@ class StreetSelector(ObjectSelector):
     _can_filter = True
 
     def _get_query_set(self, user_data):
-        streets_set = models.Street.objects
+        streets_set = models.Street.objects.order_by('name')
         pattern = self._get_pattern(user_data)
         if pattern:
             streets_set = streets_set.filter(name__icontains=pattern)
@@ -221,7 +221,7 @@ class HouseSelector(ObjectSelector):
     _keyboard_size = (4, 4)
 
     def _get_query_set(self, user_data):
-        houses_set = models.House.objects.filter(street_id=user_data['street_id'])
+        houses_set = models.House.objects.filter(street_id=user_data['street_id']).order_by('number')
         pattern = self._get_pattern(user_data)
         if pattern:
             houses_set = houses_set.filter(number__icontains=pattern)
@@ -242,7 +242,7 @@ class HouseBlockSelector(ObjectSelector):
     _keyboard_size = (4, 4)
 
     def _get_query_set(self, user_data):
-        blocks_set = models.HouseBlock.objects.filter(house_id=user_data['house_id'])
+        blocks_set = models.HouseBlock.objects.filter(house_id=user_data['house_id']).order_by('number')
         pattern = self._get_pattern(user_data)
         if pattern:
             blocks_set = blocks_set.filter(number__icontains=pattern)
@@ -263,7 +263,7 @@ class FlatSelector(ObjectSelector):
     _keyboard_size = (3, 4)
 
     def _get_query_set(self, user_data):
-        flats_set = models.Flat.objects.filter(house_block_id=user_data['house_block_id'])
+        flats_set = models.Flat.objects.filter(house_block_id=user_data['house_block_id']).order_by('number')
         pattern = self._get_pattern(user_data)
         if pattern:
             flats_set = flats_set.filter(number__icontains=pattern)
