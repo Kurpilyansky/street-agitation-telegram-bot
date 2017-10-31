@@ -317,6 +317,28 @@ class FlatContact(models.Model):
     status = models.IntegerField(choices=Status.choices, validators=[Status.validator], null=True, blank=True)
     created_by = models.ForeignKey(User, null=True, blank=True, related_name='created_contacts')
 
+    newspapers_count = models.PositiveIntegerField(default=0)
+    flyers_count = models.PositiveIntegerField(default=0)
+    registrations_count = models.PositiveIntegerField(default=0)
+    phone = models.CharField(max_length=100, null=True, blank=True)
+    comment = models.CharField(max_length=500, null=True, blank=True)
+
+    def get_report_as_dict(self):
+        return {'status': self.status,
+                'newspapers_count': self.newspapers_count,
+                'flyers_count': self.flyers_count,
+                'registrations_count': self.registrations_count,
+                'phone': self.phone,
+                'comment': self.comment}
+
+    def update_report(self, report):
+        self.status = report['status']
+        self.newspapers_count = report['newspapers_count']
+        self.flyers_count = report['flyers_count']
+        self.registrations_count = report['registrations_count']
+        self.phone = report['phone']
+        self.comment = report['comment']
+
     def show(self, markdown=True, full=True):
         lines = [self.flat.show(markdown),
                  self.team.show(markdown),
@@ -326,8 +348,17 @@ class FlatContact(models.Model):
         if self.end_time is not None:
             seconds = (self.end_time - self.start_time).total_seconds()
             lines.append('Время контакта: %d:%02d' % (seconds / 60, seconds % 60))
-        if self.status is not None:
-            lines.append('Результат: %s' % self.Status.get_choice(self.status).label)
+        if full:
+            if self.status is not None:
+                lines.append('Результат: %s' % self.Status.get_choice(self.status).label)
+            if self.newspapers_count:
+                lines.append('Газеты: %d' % self.newspapers_count)
+            if self.flyers_count:
+                lines.append('Листовки: %d' % self.flyers_count)
+            if self.registrations_count:
+                lines.append('Регистрации: %d' % self.registrations_count)
+            if self.comment:
+                lines.append('Комментарий: %d' % self.comment)
         return '\n'.join(lines)
 
     def __str__(self):

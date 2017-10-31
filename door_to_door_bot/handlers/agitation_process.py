@@ -35,6 +35,8 @@ ADD_FLAT = 'ADD_FLAT'
 CONTACT_FLAT = 'CONTACT_FLAT'
 SHOW_CONTACTS_HISTORY = 'SHOW_CONTACTS_HISTORY'
 
+FLAT_CONTACT_REPORT = 'FLAT_CONTACT_REPORT'
+FLAT_CONTACT_REPORT__SET_STATUS = 'FLAT_CONTACT_REPORT__SET_STATUS'
 
 def team_decorator(func):
     def wrapper(bot, update, user_data, *args, **kwargs):
@@ -288,7 +290,7 @@ class ContactsHistoryShower(ObjectSelector):
     def _get_query_set(self, user_data):
         contacts_set = models.FlatContact.objects\
                              .filter(team_id=user_data['cur_team_id'])\
-                             .order_by('start_time')
+                             .order_by('-start_time')
         return contacts_set.all()
 
     def _get_text(self, user_data):
@@ -438,9 +440,25 @@ class FlatContactor(object):
     def __init__(self):
         pass
 
+    _count_fields = ['newspapers_count', 'flyers_count', 'registrations_count']
+    _human_name = {'newspapers_count': 'Газета',
+                   'flyers_count': 'Листовка',
+                   'registrations_count': 'Регистрация'}
+
+
     def get_handlers(self):
-        return {CONTACT_FLAT: [EmptyHandler(team_decorator(self._handle_start), pass_user_data=True),
-                               CallbackQueryHandler(team_decorator(self._handle_button), pass_user_data=True)]}
+        return {CONTACT_FLAT: [
+                    EmptyHandler(team_decorator(self._handle_start), pass_user_data=True),
+                    CallbackQueryHandler(team_decorator(self._handle_button), pass_user_data=True)
+                ],
+                FLAT_CONTACT_REPORT: [
+                    EmptyHandler(team_decorator(self._handle_report_start), pass_user_data=True),
+                    CallbackQueryHandler(team_decorator(self._handle_report_button), pass_user_data=True)
+                ],
+                FLAT_CONTACT_REPORT__SET_STATUS: [
+                    EmptyHandler(team_decorator(self._handle_report__set_status_start), pass_user_data=True),
+                    CallbackQueryHandler(team_decorator(self._handle_report__set_status_button), pass_user_data=True)
+                ]}
 
     def _handle_start(self, bot, update, user_data, team):
         flat = models.Flat.objects.get(id=user_data['flat_id'])
@@ -466,13 +484,10 @@ class FlatContactor(object):
             keyboard.append([InlineKeyboardButton('<< Назад', callback_data=BACK)])
         elif my_flat_contact.status is not None:
             text = my_flat_contact.show()
+            keyboard.append([InlineKeyboardButton('Изменить', callback_data=FLAT_CONTACT_REPORT)])
             keyboard.append([InlineKeyboardButton('<< Назад', callback_data=BACK)])
         else:
-            text = my_flat_contact.show()
-            for status in models.FlatContact.Status.choices:
-                data = '%s_%d' % (SET_FLAT_CONTACT_STATUS, status[0])
-                keyboard.append([InlineKeyboardButton(status[1], callback_data=data)])
-            keyboard.append([InlineKeyboardButton('-- Отмена --', callback_data=CANCEL)])
+            return FLAT_CONTACT_REPORT
         send_message_text(bot, update, text,
                           user_data=user_data,
                           reply_markup=InlineKeyboardMarkup(keyboard),
@@ -481,26 +496,101 @@ class FlatContactor(object):
     def _handle_button(self, bot, update, user_data, team):
         query = update.callback_query
         query.answer()
-        if query.data == BACK:
+        if query.data in [FLAT_CONTACT_REPORT]:
+            return query.data
+        elif query.data == BACK:
             return CHOOSE_FLAT
+
+    def _build_report_text(self, flat_contact, report):
+        lines = [flat_contact.show(full=False)]
+        if report['status'] is not None:
+            lines.append('Статус: %s' % models.FlatContact.Status.get_choice(report['status']).label)
+        for name in self._count_fields:
+            report[name] = int(report[name])
+            if report[name]:
+                lines.append('%s: %d' % (self._human_name[name], report[name]))
+        if report['comment']:
+            lines.append('Комментарий: %s' % report['comment'])
+        return '\n'.join(lines)
+
+    def _handle_report_start(self, bot, update, user_data, team):
+        flat = models.Flat.objects.get(id=user_data['flat_id'])
+        my_flat_contact = models.FlatContact.objects.filter(team_id=team.id, flat_id=flat.id).first()
+        if not my_flat_contact:
+            return CHOOSE_FLAT
+        if 'report' not in user_data:
+            user_data['report'] = my_flat_contact.get_report_as_dict()
+        report = user_data['report']
+        if report['status'] is None:
+            return FLAT_CONTACT_REPORT__SET_STATUS
+        keyboard = []
+        for name in self._count_fields:
+            keyboard.append([InlineKeyboardButton('+ ' + self._human_name[name], callback_data='+' + name),
+                             InlineKeyboardButton('- ' + self._human_name[name], callback_data='-' + name)])
+        keyboard.append([InlineKeyboardButton('Изменить статус', callback_data=FLAT_CONTACT_REPORT__SET_STATUS)])
+        keyboard.append([InlineKeyboardButton('-- Сохранить --', callback_data=END)])
+        if my_flat_contact.end_time:
+            keyboard.append([InlineKeyboardButton('-- Отмена --', callback_data=CANCEL)])
+
+        send_message_text(bot, update, self._build_report_text(my_flat_contact, report),
+                          user_data=user_data,
+                          reply_markup=InlineKeyboardMarkup(keyboard),
+                          parse_mode='Markdown')
+
+    def _handle_report_button(self, bot, update, user_data, team):
+        query = update.callback_query
+        query.answer()
+        if query.data in [FLAT_CONTACT_REPORT__SET_STATUS]:
+            return query.data
+        if query.data == END:
+            flat = models.Flat.objects.get(id=user_data['flat_id'])
+            my_flat_contact = models.FlatContact.objects.filter(team_id=team.id, flat_id=flat.id).first()
+            my_flat_contact.update_report(user_data['report'])
+            if my_flat_contact.end_time is None:
+                my_flat_contact.end_time = datetime.now()
+            my_flat_contact.save()
+            del user_data['report']
+            return CONTACT_FLAT
         elif query.data == CANCEL:
-            models.FlatContact.objects \
-                .filter(team_id=team.id,
-                        flat_id=user_data['flat_id']
-                        ).delete()
-            return CHOOSE_FLAT
+            del user_data['report']
+            return CONTACT_FLAT
+        elif query.data[0] == '+' or query.data[0] == '-':
+            name = query.data[1:]
+            delta = 1 if query.data[0] == '+' else -1
+            user_data['report'][name] = max(0, int(user_data['report'][name]) + delta)
+
+    def _handle_report__set_status_start(self, bot, update, user_data, team):
+        flat = models.Flat.objects.get(id=user_data['flat_id'])
+        my_flat_contact = models.FlatContact.objects.filter(team_id=team.id, flat_id=flat.id).first()
+        report = user_data['report']
+        keyboard = []
+        for status in models.FlatContact.Status.choices:
+            data = '%s_%d' % (SET_FLAT_CONTACT_STATUS, status[0])
+            keyboard.append([InlineKeyboardButton(status[1], callback_data=data)])
+        keyboard.append([InlineKeyboardButton('-- Отмена --', callback_data=CANCEL)])
+        send_message_text(bot, update, self._build_report_text(my_flat_contact, report),
+                          user_data=user_data,
+                          reply_markup=InlineKeyboardMarkup(keyboard),
+                          parse_mode='Markdown')
+
+    def _handle_report__set_status_button(self, bot, update, user_data, team):
+        query = update.callback_query
+        query.answer()
+        report = user_data['report']
+        if query.data == CANCEL:
+            if report['status'] is None:
+                models.FlatContact.objects \
+                    .filter(team_id=team.id,
+                            flat_id=user_data['flat_id']
+                            ).delete()
+                return CHOOSE_FLAT
+            else:
+                return FLAT_CONTACT_REPORT
         else:
             match = re.match('%s_(\d+)' % SET_FLAT_CONTACT_STATUS, query.data)
             if match:
-                flat_contact = models.FlatContact.objects\
-                                     .filter(team_id=team.id,
-                                             flat_id=user_data['flat_id']
-                                             )\
-                                     .first()
-                flat_contact.status = int(match.group(1))
-                flat_contact.end_time = datetime.now()
-                flat_contact.save()
-                return CHOOSE_FLAT
+                report['status'] = int(match.group(1))
+                return FLAT_CONTACT_REPORT
 
 
 state_handlers = {
