@@ -320,7 +320,7 @@ class FlatContact(models.Model):
     newspapers_count = models.PositiveIntegerField(default=0)
     flyers_count = models.PositiveIntegerField(default=0)
     registrations_count = models.PositiveIntegerField(default=0)
-    phone = models.CharField(max_length=100, null=True, blank=True)
+    contacts = models.CharField(max_length=500, null=True, blank=True)
     comment = models.CharField(max_length=500, null=True, blank=True)
 
     def get_report_as_dict(self):
@@ -328,7 +328,7 @@ class FlatContact(models.Model):
                 'newspapers_count': self.newspapers_count,
                 'flyers_count': self.flyers_count,
                 'registrations_count': self.registrations_count,
-                'phone': self.phone,
+                'contacts': self.contacts,
                 'comment': self.comment}
 
     def update_report(self, report):
@@ -336,7 +336,7 @@ class FlatContact(models.Model):
         self.newspapers_count = report['newspapers_count']
         self.flyers_count = report['flyers_count']
         self.registrations_count = report['registrations_count']
-        self.phone = report['phone']
+        self.contacts = report['contacts']
         self.comment = report['comment']
 
     def show(self, markdown=True, full=True):
@@ -358,7 +358,9 @@ class FlatContact(models.Model):
             if self.registrations_count:
                 lines.append('Регистрации: %d' % self.registrations_count)
             if self.comment:
-                lines.append('Комментарий: %d' % self.comment)
+                lines.append('Комментарий: %s' % self.comment)
+            if self.contacts:
+                lines.append('Контакты: %s' % self.contacts)
         return '\n'.join(lines)
 
     def __str__(self):

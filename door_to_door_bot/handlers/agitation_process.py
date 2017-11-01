@@ -37,6 +37,8 @@ SHOW_CONTACTS_HISTORY = 'SHOW_CONTACTS_HISTORY'
 
 FLAT_CONTACT_REPORT = 'FLAT_CONTACT_REPORT'
 FLAT_CONTACT_REPORT__SET_STATUS = 'FLAT_CONTACT_REPORT__SET_STATUS'
+FLAT_CONTACT_REPORT__SET_COMMENT = 'FLAT_CONTACT_REPORT__SET_COMMENT'
+FLAT_CONTACT_REPORT__SET_CONTACTS = 'FLAT_CONTACT_REPORT__SET_CONTACTS'
 
 def team_decorator(func):
     def wrapper(bot, update, user_data, *args, **kwargs):
@@ -445,20 +447,24 @@ class FlatContactor(object):
                    'flyers_count': 'Листовка',
                    'registrations_count': 'Регистрация'}
 
-
     def get_handlers(self):
-        return {CONTACT_FLAT: [
+        handlers = {
+            CONTACT_FLAT: [
                     EmptyHandler(team_decorator(self._handle_start), pass_user_data=True),
                     CallbackQueryHandler(team_decorator(self._handle_button), pass_user_data=True)
                 ],
-                FLAT_CONTACT_REPORT: [
+            FLAT_CONTACT_REPORT: [
                     EmptyHandler(team_decorator(self._handle_report_start), pass_user_data=True),
                     CallbackQueryHandler(team_decorator(self._handle_report_button), pass_user_data=True)
                 ],
-                FLAT_CONTACT_REPORT__SET_STATUS: [
+            FLAT_CONTACT_REPORT__SET_STATUS: [
                     EmptyHandler(team_decorator(self._handle_report__set_status_start), pass_user_data=True),
                     CallbackQueryHandler(team_decorator(self._handle_report__set_status_button), pass_user_data=True)
-                ]}
+                ]
+        }
+        handlers.update(self.ReportCommentSetter(self).get_handlers())
+        handlers.update(self.ReportContactsSetter(self).get_handlers())
+        return handlers
 
     def _handle_start(self, bot, update, user_data, team):
         flat = models.Flat.objects.get(id=user_data['flat_id'])
@@ -511,6 +517,8 @@ class FlatContactor(object):
                 lines.append('%s: %d' % (self._human_name[name], report[name]))
         if report['comment']:
             lines.append('Комментарий: %s' % report['comment'])
+        if report['contacts']:
+            lines.append('Контакты: %s' % report['contacts'])
         return '\n'.join(lines)
 
     def _handle_report_start(self, bot, update, user_data, team):
@@ -528,6 +536,10 @@ class FlatContactor(object):
             keyboard.append([InlineKeyboardButton('+ ' + self._human_name[name], callback_data='+' + name),
                              InlineKeyboardButton('- ' + self._human_name[name], callback_data='-' + name)])
         keyboard.append([InlineKeyboardButton('Изменить статус', callback_data=FLAT_CONTACT_REPORT__SET_STATUS)])
+        keyboard.append([InlineKeyboardButton('Изменить комментарий' if report['comment'] else 'Оставить комментарий',
+                                              callback_data=FLAT_CONTACT_REPORT__SET_COMMENT)])
+        keyboard.append([InlineKeyboardButton('Изменить контакты' if report['contacts'] else 'Оставить контакты',
+                                              callback_data=FLAT_CONTACT_REPORT__SET_CONTACTS)])
         keyboard.append([InlineKeyboardButton('-- Сохранить --', callback_data=END)])
         if my_flat_contact.end_time:
             keyboard.append([InlineKeyboardButton('-- Отмена --', callback_data=CANCEL)])
@@ -540,7 +552,9 @@ class FlatContactor(object):
     def _handle_report_button(self, bot, update, user_data, team):
         query = update.callback_query
         query.answer()
-        if query.data in [FLAT_CONTACT_REPORT__SET_STATUS]:
+        if query.data in [FLAT_CONTACT_REPORT__SET_STATUS,
+                          FLAT_CONTACT_REPORT__SET_COMMENT,
+                          FLAT_CONTACT_REPORT__SET_CONTACTS]:
             return query.data
         if query.data == END:
             flat = models.Flat.objects.get(id=user_data['flat_id'])
@@ -591,6 +605,57 @@ class FlatContactor(object):
             if match:
                 report['status'] = int(match.group(1))
                 return FLAT_CONTACT_REPORT
+
+    class ReportStringSetter(object):
+        state = ''
+        field_name = ''
+        human_field_name = ''
+
+        def __init__(self, contactor):
+            self.contactor = contactor
+
+        def get_handlers(self):
+            return {self.state: [EmptyHandler(team_decorator(self._handle_start), pass_user_data=True),
+                                 CallbackQueryHandler(self._handle_button, pass_user_data=True),
+                                 MessageHandler(Filters.text, self._handle_text, pass_user_data=True)]}
+
+        def _handle_start(self, bot, update, user_data, team):
+            flat = models.Flat.objects.get(id=user_data['flat_id'])
+            my_flat_contact = models.FlatContact.objects.filter(team_id=team.id, flat_id=flat.id).first()
+            report = user_data['report']
+            keyboard = []
+            if report[self.field_name]:
+                keyboard.append([InlineKeyboardButton('Удалить %s' % self.human_field_name,
+                                                      callback_data=DELETE)])
+            keyboard.append([InlineKeyboardButton('-- Отмена --', callback_data=CANCEL)])
+            send_message_text(bot, update,
+                              '%s\n\n*Введите %s*' % (self.contactor._build_report_text(my_flat_contact, report),
+                                                      self.human_field_name),
+                              user_data=user_data,
+                              parse_mode='Markdown',
+                              reply_markup=InlineKeyboardMarkup(keyboard))
+
+        def _handle_text(self, bot, update, user_data):
+            user_data['report'][self.field_name] = update.message.text
+            return FLAT_CONTACT_REPORT
+
+        def _handle_button(self, bot, update, user_data):
+            query = update.callback_query
+            query.answer()
+            if query.data == DELETE:
+                user_data['report'][self.field_name] = None
+            return FLAT_CONTACT_REPORT
+
+    class ReportCommentSetter(ReportStringSetter):
+        state = FLAT_CONTACT_REPORT__SET_COMMENT
+        field_name = 'comment'
+        human_field_name = 'комментарий'
+
+    class ReportContactsSetter(ReportStringSetter):
+        state = FLAT_CONTACT_REPORT__SET_CONTACTS
+        field_name = 'contacts'
+        human_field_name = 'контакты (телефон, e-mail)'
+
 
 
 state_handlers = {
