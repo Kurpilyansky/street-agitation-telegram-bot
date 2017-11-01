@@ -406,7 +406,7 @@ def show_schedule(bot, update, user_data, region_id):
 
 def cube_application(bot, update, user_data):
     text = 'Если вы готовы стать заявителем куба, то вам нужно заполнить эту форму ' \
-           'и подать её в администрацию вашего района. https://goo.gl/3GneK2'  #TODO make a document
+           'и подать её в администрацию вашего района. https://goo.gl/2ZsoGX'  #TODO make a document
     send_message_text(bot, update, user_data, text, reply_markup=_create_back_to_menu_keyboard())
 
 
