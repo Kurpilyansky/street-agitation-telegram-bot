@@ -47,6 +47,27 @@ def start_agitation_process_button(bot, update, user_data):
             return MENU
 
 
+def show_team_start(bot, update, user_data):
+    team = models.AgitationTeam.objects.filter(id=user_data['show_team_id']).first()
+    if not team:
+        del user_data['show_team_id']
+        return MENU
+    keyboard = [[InlineKeyboardButton('<< Меню', callback_data=BACK)]]
+    send_message_text(bot, update,
+                      '*Команда*\n%s' % team.show(),
+                      user_data=user_data,
+                      parse_mode='Markdown',
+                      reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+def show_team_button(bot, update, user_data):
+    query = update.callback_query
+    query.answer()
+    if query.data == BACK:
+        del user_data['show_team_id']
+        return MENU
+
+
 @region_decorator
 def team_list_start(bot, update, user_data, region_id):
     user_telegram_id = update.effective_user.id
@@ -113,6 +134,7 @@ def create_new_team_button(bot, update, user_data, region_id):
     if query.data == YES:
         region = models.Region.get_by_id(region_id)
         team_opts = user_data['team']
+        del user_data['team']
         start_time = datetime(year=team_opts['year'],
                               month=team_opts['month'],
                               day=team_opts['day'],
@@ -124,6 +146,9 @@ def create_new_team_button(bot, update, user_data, region_id):
         team.save()
         user = models.User.find_by_telegram_id(update.effective_user.id)
         team.agitators.add(user)
+
+        user_data['show_team_id'] = team.id
+        return SHOW_TEAM
     del user_data['team']
     return MENU
 
@@ -202,7 +227,8 @@ def join_team_button(bot, update, user_data):
         team = models.AgitationTeam.objects.get(id=team_id)
         user = models.User.find_by_telegram_id(update.effective_user.id)
         team.agitators.add(user)
-        return MENU
+        user_data['show_team_id'] = team.id
+        return SHOW_TEAM
     return SHOW_TEAM_LIST
 
 
@@ -219,6 +245,8 @@ state_handlers = {
     CREATE_NEW_TEAM__SET_PLACE: [EmptyHandler(create_new_team___set_place_start, pass_user_data=True),
                                  MessageHandler(Filters.text, create_new_team__set_place_text, pass_user_data=True),
                                  standard_callback_query_handler],
+    SHOW_TEAM: [EmptyHandler(show_team_start, pass_user_data=True),
+                CallbackQueryHandler(show_team_button, pass_user_data=True)],
     JOIN_TEAM: [EmptyHandler(join_team_start, pass_user_data=True),
                 CallbackQueryHandler(join_team_button, pass_user_data=True)],
     START_AGITATION_PROCESS: [EmptyHandler(start_agitation_process_start, pass_user_data=True),
