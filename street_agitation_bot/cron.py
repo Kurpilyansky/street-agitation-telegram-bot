@@ -195,6 +195,7 @@ cron_tab = None
 
 
 def _create_cron_tasks(bot):
+    return
     query_set = models.AgitationEvent.objects \
         .filter(need_cube=True, is_canceled=False) \
         .filter(Q(cubeusageinevent=None)
