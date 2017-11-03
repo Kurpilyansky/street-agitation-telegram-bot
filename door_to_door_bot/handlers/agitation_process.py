@@ -1,3 +1,4 @@
+from itertools import starmap
 
 from django.db.models import Q
 
@@ -34,6 +35,7 @@ CHOOSE_FLAT = 'CHOOSE_FLAT'
 ADD_FLAT = 'ADD_FLAT'
 CONTACT_FLAT = 'CONTACT_FLAT'
 SHOW_CONTACTS_HISTORY = 'SHOW_CONTACTS_HISTORY'
+SHOW_TEAM_FINAL_REPORT = 'SHOW_TEAM_FINAL_REPORT'
 
 FLAT_CONTACT_REPORT = 'FLAT_CONTACT_REPORT'
 FLAT_CONTACT_REPORT__SET_STATUS = 'FLAT_CONTACT_REPORT__SET_STATUS'
@@ -59,6 +61,7 @@ def team_decorator(func):
 def show_menu(bot, update, user_data, team):
     keyboard = [[InlineKeyboardButton('Выбрать улицу', callback_data=CHOOSE_STREET)],
                 [InlineKeyboardButton('История обхода', callback_data=SHOW_CONTACTS_HISTORY)],
+                [InlineKeyboardButton('Отчёт', callback_data=SHOW_TEAM_FINAL_REPORT)],
                 [InlineKeyboardButton('<< Главное меню', callback_data=END_AGITATION_PROCESS)]]
     send_message_text(bot, update,
                       team.show(markdown=True),
@@ -662,6 +665,63 @@ class FlatContactor(object):
         human_field_name = 'контакты (телефон, e-mail)'
 
 
+class FinalReportShower(object):
+    def __init__(self):
+        pass
+
+    def get_handlers(self):
+        return {
+            SHOW_TEAM_FINAL_REPORT: [EmptyHandler(team_decorator(self._handle_start), pass_user_data=True),
+                                     standard_callback_query_handler]
+        }
+
+    def _handle_start(self, bot, update, user_data, team):
+        contacts = models.FlatContact.objects.filter(team_id=team.id)\
+                                             .select_related('flat', 'flat__house_block', 'flat__house_block__house')\
+                                             .all()
+        reports = {}
+        for contact in contacts:
+            if contact.end_time is None:
+                continue
+            if contact.flat.house_block.house.id not in reports:
+                reports[contact.flat.house_block.house.id] = {
+                    'house': contact.flat.house_block.house,
+                    'flats_count': 0,
+                    'total_seconds': 0,
+                    'statuses': {},
+                    'newspapers_count': 0,
+                    'flyers_count': 0,
+                    'registrations_count': 0,
+                }
+            report = reports[contact.flat.house_block.house.id]
+            report['flats_count'] += 1
+            report['total_seconds'] += (contact.end_time - contact.start_time).total_seconds()
+            if contact.status not in report['statuses']:
+                report['statuses'][contact.status] = {'flats_count': 0,
+                                                      'total_seconds': 0}
+            report['statuses'][contact.status]['flats_count'] += 1
+            report['statuses'][contact.status]['total_seconds'] += (contact.end_time - contact.start_time).total_seconds()
+            report['newspapers_count'] += contact.newspapers_count
+            report['flyers_count'] += contact.flyers_count
+            report['registrations_count'] += contact.registrations_count
+        lines = []
+        for report in reports.values():
+            lines.append('Команда: ' + team.show())
+            lines.append('Адрес: ' + report['house'].show())
+            lines.append('Всего: %d квартир (среднее время %dс)' % (report['flats_count'], report['total_seconds'] / report['flats_count']))
+            for status, stats in report['statuses'].items():
+                lines.append('    %s: %d квартир (среднее время %dс)' %
+                             (models.FlatContact.Status.get_choice(status).label, stats['flats_count'], stats['total_seconds'] / stats['flats_count']))
+            lines.append('Газеты: %d' % report['newspapers_count'])
+            lines.append('Листовки: %d' % report['flyers_count'])
+            lines.append('Регистрации: %d' % report['registrations_count'])
+            lines.append('')
+
+        send_message_text(bot, update, '\n'.join(lines),
+                          user_data=user_data,
+                          parse_mode='Markdown',
+                          reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('<< Назад', callback_data=MENU)]]))
+
 
 state_handlers = {
     # MENU: [EmptyHandler(show_menu, pass_user_data=True), standard_callback_query_handler],
@@ -677,3 +737,4 @@ state_handlers.update(FlatSelector().get_handlers())
 state_handlers.update(FlatCreator().get_handlers())
 state_handlers.update(FlatContactor().get_handlers())
 state_handlers.update(ContactsHistoryShower().get_handlers())
+state_handlers.update(FinalReportShower().get_handlers())
