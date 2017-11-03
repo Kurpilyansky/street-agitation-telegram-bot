@@ -307,6 +307,7 @@ class FlatContact(models.Model):
         NONE = djchoices.ChoiceItem(0, 'Нет дома')
         CLOSE_NEGATIVE = djchoices.ChoiceItem(1, 'Не открыли - отказ')
         OPEN_NEGATIVE = djchoices.ChoiceItem(2, 'Открыли - отказ')
+        OPEN_DOUBTING = djchoices.ChoiceItem(5, 'Открыли - сомневающийся')
         POSITIVE = djchoices.ChoiceItem(3, 'Открыли - сторонник')
         AGGRESSIVE = djchoices.ChoiceItem(4, 'Агрессия')
 
