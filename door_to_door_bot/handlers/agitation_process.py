@@ -557,14 +557,7 @@ class FlatContactor(object):
                           FLAT_CONTACT_REPORT__SET_CONTACTS]:
             return query.data
         if query.data == END:
-            flat = models.Flat.objects.get(id=user_data['flat_id'])
-            my_flat_contact = models.FlatContact.objects.filter(team_id=team.id, flat_id=flat.id).first()
-            my_flat_contact.update_report(user_data['report'])
-            if my_flat_contact.end_time is None:
-                my_flat_contact.end_time = datetime.now()
-            my_flat_contact.save()
-            del user_data['report']
-            return CONTACT_FLAT
+            return self._save_contact(user_data, team)
         elif query.data == CANCEL:
             del user_data['report']
             return CONTACT_FLAT
@@ -572,6 +565,16 @@ class FlatContactor(object):
             name = query.data[1:]
             delta = 1 if query.data[0] == '+' else -1
             user_data['report'][name] = max(0, int(user_data['report'][name]) + delta)
+
+    def _save_contact(self, user_data, team):
+        flat = models.Flat.objects.get(id=user_data['flat_id'])
+        my_flat_contact = models.FlatContact.objects.filter(team_id=team.id, flat_id=flat.id).first()
+        my_flat_contact.update_report(user_data['report'])
+        if my_flat_contact.end_time is None:
+            my_flat_contact.end_time = datetime.now()
+        my_flat_contact.save()
+        del user_data['report']
+        return CONTACT_FLAT
 
     def _handle_report__set_status_start(self, bot, update, user_data, team):
         flat = models.Flat.objects.get(id=user_data['flat_id'])
@@ -604,6 +607,8 @@ class FlatContactor(object):
             match = re.match('%s_(\d+)' % SET_FLAT_CONTACT_STATUS, query.data)
             if match:
                 report['status'] = int(match.group(1))
+                if models.FlatContact.Status.NONE == report['status']:
+                    return self._save_contact(user_data, team)
                 return FLAT_CONTACT_REPORT
 
     class ReportStringSetter(object):
