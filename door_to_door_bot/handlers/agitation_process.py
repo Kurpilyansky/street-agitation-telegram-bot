@@ -721,7 +721,7 @@ class FinalReportShower(object):
             lines.append('Регистрации: %d' % report['registrations_count'])
             lines.append('')
 
-        send_message_text(bot, update, '\n'.join(lines),
+        send_message_text(bot, update,'Отчёт\n' +  '\n'.join(lines),
                           user_data=user_data,
                           parse_mode='Markdown',
                           reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('<< Назад', callback_data=MENU)]]))
