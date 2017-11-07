@@ -42,6 +42,7 @@ FLAT_CONTACT_REPORT__SET_STATUS = 'FLAT_CONTACT_REPORT__SET_STATUS'
 FLAT_CONTACT_REPORT__SET_COMMENT = 'FLAT_CONTACT_REPORT__SET_COMMENT'
 FLAT_CONTACT_REPORT__SET_CONTACTS = 'FLAT_CONTACT_REPORT__SET_CONTACTS'
 
+
 def team_decorator(func):
     def wrapper(bot, update, user_data, *args, **kwargs):
         if 'cur_team_id' not in user_data:
@@ -154,7 +155,8 @@ class ObjectSelector(object):
                                                   callback_data=CLEAR_FILTER)])
         if self._add_state_name:
             keyboard.append([InlineKeyboardButton('+', callback_data=ADD_NEW_OBJECT)])
-        keyboard.append([InlineKeyboardButton('<< Назад', callback_data=RETURN_TO_BACK)])
+        keyboard.append([InlineKeyboardButton('< Назад', callback_data=RETURN_TO_BACK),
+                         InlineKeyboardButton('<< Меню', callback_data=MENU)])
 
         text = self._get_text(user_data)
         if self._can_filter:
@@ -170,7 +172,9 @@ class ObjectSelector(object):
     def _handle_button(self, bot, update, user_data):
         query = update.callback_query
         query.answer()
-        if query.data == CLEAR_FILTER:
+        if query.data in [MENU]:
+            return query.data
+        elif query.data == CLEAR_FILTER:
             self._del_pattern(user_data)
             return
         elif query.data == ADD_NEW_OBJECT:
@@ -208,7 +212,7 @@ class StreetSelector(ObjectSelector):
     _can_filter = True
 
     def _get_query_set(self, user_data):
-        streets_set = models.Street.objects.order_by('name')
+        streets_set = models.Street.objects.order_by('name').filter(region_id=user_data['region_id'])
         pattern = self._get_pattern(user_data)
         if pattern:
             streets_set = streets_set.filter(name__icontains=pattern)
