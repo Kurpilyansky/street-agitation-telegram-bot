@@ -1582,7 +1582,11 @@ def add_admin_rights_start(bot, update, user_data, region_id):
     level = models.AdminRights.get_admin_rights_level(user_telegram_id, region_id)
     if level < models.AdminRights.SUPER_ADMIN_LEVEL:
         return SHOW_REGION_SETTINGS
-    text = 'Укажите нового админа'
+    text = '*Укажите нового админа.*\n' \
+           'Вы можете указать пользователя в одном из трех форматов:\n' \
+           '- "@(имя в телеграмме)" (пользователь *должен быть* зарегистрирован в боте);\n' \
+           '- "+70123456789 Вася Пупкин";\n' \
+           '- "Share contact" из вашего списка контактов.'
     keyboard = [[InlineKeyboardButton('<< Назад', callback_data=MANAGE_ADMIN_RIGHTS)]]
     send_message_text(bot, update, user_data,
                       text,

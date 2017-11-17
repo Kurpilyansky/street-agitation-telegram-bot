@@ -267,6 +267,47 @@ def manage_admin_rights_button(bot, update, user_data, region_id):
             models.AdminRights.disrank(user_id, region_id, level)
 
 
+def _extract_mentioned_user(message):
+    if len(message.entities) > 1:
+        return
+    params = None
+    if len(message.entities) == 1:
+        entity = message.entities[0]
+        if entity.type == 'mention':
+            agitator_username = str(message.text[entity.offset:][:entity.length][1:])
+            return models.User.objects.filter(telegram=agitator_username).first()
+            ## TODO support non-registered users with username: how to check correctness of username?
+        elif entity.type == 'text_mention':
+            params = {'telegram_id': entity.user.id,
+                      'first_name': entity.first_name,
+                      'last_name': entity.last_name}
+    elif Filters.contact(message):
+        contact = message.contact
+        params = {'phone': contact.phone_number,
+                  'telegram_id': contact.user_id,
+                  'first_name': contact.first_name,
+                  'last_name': contact.last_name,
+                  }
+    elif Filters.text(message):
+        text = message.text
+        tokens = text.split()
+        phone, name = '', ''
+        for i in range(len(tokens)):
+            cur_phone = utils.clean_phone_number(' '.join(tokens[0:i + 1]))
+            cur_name = ' '.join(tokens[i + 1:])
+            if (len(phone), len(name)) < (len(cur_phone), len(cur_name)):
+                phone, name = cur_phone, cur_name
+            cur_phone = utils.clean_phone_number(' '.join(tokens[i:]))
+            cur_name = ' '.join(tokens[0:i])
+            if (len(phone), len(name)) < (len(cur_phone), len(cur_name)):
+                phone, name = cur_phone, cur_name
+        if len(phone) >= 5:
+            params = {'phone': phone,
+                      'first_name': name}
+    if params:
+        return models.User.update_or_create(params)[0]
+
+
 @region_decorator
 @has_admin_rights
 def add_admin_rights_start(bot, update, user_data, region_id):
@@ -274,7 +315,11 @@ def add_admin_rights_start(bot, update, user_data, region_id):
     level = models.AdminRights.get_admin_rights_level(user_telegram_id, region_id)
     if level < models.AdminRights.SUPER_ADMIN_LEVEL:
         return SHOW_REGION_SETTINGS
-    text = 'Укажите нового админа'
+    text = '*Укажите нового админа.*\n' \
+           'Вы можете указать пользователя в одном из трех форматов:\n' \
+           '- "@(имя в телеграмме)" (пользователь *должен быть* зарегистрирован в боте);\n' \
+           '- "+70123456789 Вася Пупкин";\n' \
+           '- "Share contact" из вашего списка контактов.'
     keyboard = [[InlineKeyboardButton('<< Назад', callback_data=MANAGE_ADMIN_RIGHTS)]]
     send_message_text(bot, update, text, user_data=user_data,
                       parse_mode='Markdown',
