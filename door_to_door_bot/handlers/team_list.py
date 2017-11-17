@@ -16,6 +16,55 @@ from door_to_door_bot.bot_constants import *
 from datetime import date, timedelta
 
 
+ALL_TEAMS_PAGE_SIZE = 10
+
+
+@region_decorator
+def show_all_teams_start(bot, update, user_data, region_id):
+    user_telegram_id = update.effective_user.id
+    if not models.AdminRights.has_admin_rights(user_telegram_id, region_id):
+        return MENU
+
+    page_size = ALL_TEAMS_PAGE_SIZE
+    offset = user_data.get('all_teams_offset', 0)
+
+    query_set = models.AgitationTeam.objects.filter(region_id=region_id).order_by('-start_time').all()
+    total_count = query_set.count()
+    if offset < 0:
+        offset = 0
+    if offset >= total_count:
+        offset = max(0, total_count - page_size)
+    teams = list(query_set[offset:][:page_size])
+    keyboard = []
+    for team in teams:
+        keyboard.append([InlineKeyboardButton(team.show(markdown=False), callback_data=str(team.id))])
+    keyboard += build_paging_buttons(offset, total_count, page_size, True)
+    keyboard.append([InlineKeyboardButton('<< Назад', callback_data=MENU)])
+    send_message_text(bot, update, 'Выберите команду для обхода',
+                      user_data=user_data,
+                      reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+def show_all_teams_button(bot, update, user_data):
+    query = update.callback_query
+    query.answer()
+    if query.data in [MENU]:
+        return query.data
+    elif query.data == TO_BEGIN:
+        user_data['all_teams_offset'] = 0
+    elif query.data == TO_END:
+        user_data['all_teams_offset'] = 1000000
+    elif query.data == BACK:
+        user_data['all_teams_offset'] = user_data.get('all_teams_offset', 0) - ALL_TEAMS_PAGE_SIZE
+    elif query.data == FORWARD:
+        user_data['all_teams_offset'] = user_data.get('all_teams_offset', 0) + ALL_TEAMS_PAGE_SIZE
+    else:
+        match = re.match('\d+', query.data)
+        if bool(match):
+            user_data['cur_team_id'] = int(query.data)
+            return MENU
+
+
 @region_decorator
 def start_agitation_process_start(bot, update, user_data, region_id):
     user_telegram_id = update.effective_user.id
@@ -250,5 +299,7 @@ state_handlers = {
     JOIN_TEAM: [EmptyHandler(join_team_start, pass_user_data=True),
                 CallbackQueryHandler(join_team_button, pass_user_data=True)],
     START_AGITATION_PROCESS: [EmptyHandler(start_agitation_process_start, pass_user_data=True),
-                              CallbackQueryHandler(start_agitation_process_button, pass_user_data=True)]
+                              CallbackQueryHandler(start_agitation_process_button, pass_user_data=True)],
+    SHOW_ALL_TEAMS: [EmptyHandler(show_all_teams_start, pass_user_data=True),
+                     CallbackQueryHandler(show_all_teams_button, pass_user_data=True)],
 }

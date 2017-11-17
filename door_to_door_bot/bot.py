@@ -141,6 +141,7 @@ def show_menu(bot, update, user_data):
         keyboard.append([InlineKeyboardButton('Записаться', callback_data=SHOW_TEAM_LIST)])
         keyboard.append([InlineKeyboardButton('Начать обход', callback_data=START_AGITATION_PROCESS)])
         if models.AdminRights.has_admin_rights(user_telegram_id, region_id):
+            keyboard.append([InlineKeyboardButton('Все команды и отчёты', callback_data=SHOW_ALL_TEAMS)])
             keyboard.append([InlineKeyboardButton('Сделать рассылку', callback_data=MAKE_BROADCAST)])
             keyboard.append([InlineKeyboardButton('Настройки штаба', callback_data=SHOW_REGION_SETTINGS)])
         send_message_text(bot, update, '*Меню*\nВыберите действие для продолжения работы',
