@@ -20,10 +20,9 @@ ALL_TEAMS_PAGE_SIZE = 10
 
 
 @region_decorator
+@has_admin_rights
 def show_all_teams_start(bot, update, user_data, region_id):
-    user_telegram_id = update.effective_user.id
-    if not models.AdminRights.has_admin_rights(user_telegram_id, region_id):
-        return MENU
+    region = models.Region.get_by_id(region_id)
 
     page_size = ALL_TEAMS_PAGE_SIZE
     offset = user_data.get('all_teams_offset', 0)
@@ -40,11 +39,13 @@ def show_all_teams_start(bot, update, user_data, region_id):
         keyboard.append([InlineKeyboardButton(team.show(markdown=False), callback_data=str(team.id))])
     keyboard += build_paging_buttons(offset, total_count, page_size, True)
     keyboard.append([InlineKeyboardButton('<< Назад', callback_data=MENU)])
-    send_message_text(bot, update, 'Выберите команду для обхода',
+    send_message_text(bot, update, 'Все команды *%s* - вы можете следить за любой из них' % region.name,
                       user_data=user_data,
-                      reply_markup=InlineKeyboardMarkup(keyboard))
+                      reply_markup=InlineKeyboardMarkup(keyboard),
+                      parse_mode='Markdown')
 
 
+@has_admin_rights
 def show_all_teams_button(bot, update, user_data):
     query = update.callback_query
     query.answer()
@@ -67,6 +68,8 @@ def show_all_teams_button(bot, update, user_data):
 
 @region_decorator
 def start_agitation_process_start(bot, update, user_data, region_id):
+    region = models.Region.get_by_id(region_id)
+
     user_telegram_id = update.effective_user.id
     my_teams = list(models.AgitationTeam
                           .objects
@@ -79,9 +82,10 @@ def start_agitation_process_start(bot, update, user_data, region_id):
     for team in my_teams:
         keyboard.append([InlineKeyboardButton(team.show(markdown=False), callback_data=str(team.id))])
     keyboard.append([InlineKeyboardButton('<< Назад', callback_data=BACK)])
-    send_message_text(bot, update, 'Выберите команду для обхода',
+    send_message_text(bot, update, '*%s*\nВыберите команду для обхода' % region.name,
                       user_data=user_data,
-                      reply_markup=InlineKeyboardMarkup(keyboard))
+                      reply_markup=InlineKeyboardMarkup(keyboard),
+                      parse_mode='Markdown')
 
 
 def start_agitation_process_button(bot, update, user_data):
@@ -119,6 +123,7 @@ def show_team_button(bot, update, user_data):
 
 @region_decorator
 def team_list_start(bot, update, user_data, region_id):
+    region = models.Region.get_by_id(region_id)
     user_telegram_id = update.effective_user.id
     teams = list(models.AgitationTeam
                        .objects
@@ -138,7 +143,7 @@ def team_list_start(bot, update, user_data, region_id):
                 keyboard.append([InlineKeyboardButton(team.show(markdown=False), callback_data=str(team.id))])
     keyboard.append([InlineKeyboardButton('Создать новую команду', callback_data=NEW)])
     keyboard.append([InlineKeyboardButton('<< Меню', callback_data=MENU)])
-    text = ''
+    text = '*%s*\n' % region.name
     if full_teams_str:
         text += '%d команд уже сформировано целиком\n' % len(full_teams_str)
     if teams_str:

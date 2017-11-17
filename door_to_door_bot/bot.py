@@ -144,17 +144,19 @@ def show_menu(bot, update, user_data):
             keyboard.append([InlineKeyboardButton('Все команды и отчёты', callback_data=SHOW_ALL_TEAMS)])
             keyboard.append([InlineKeyboardButton('Сделать рассылку', callback_data=MAKE_BROADCAST)])
             keyboard.append([InlineKeyboardButton('Настройки штаба', callback_data=SHOW_REGION_SETTINGS)])
-        send_message_text(bot, update, '*Меню*\nВыберите действие для продолжения работы',
+        send_message_text(bot, update, '*Меню - %s*\nВыберите действие для продолжения работы' % region.name,
                           user_data=user_data,
                           parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
     else:
         return agitation_process_handlers.show_menu(bot, update, user_data)
 
 
+@region_decorator
 @has_admin_rights
-def make_broadcast_start(bot, update, user_data):
+def make_broadcast_start(bot, update, user_data, region_id):
+    region = models.Region.get_by_id(region_id)
     send_message_text(bot, update,
-                      '*Отправьте сообщение, и оно будет отправлено всем пользователям*',
+                      '*%s*\nОтправьте сообщение, и оно будет отправлено всем пользователям' % region.name,
                       user_data=user_data,
                       parse_mode='Markdown')
 
@@ -165,10 +167,12 @@ def make_broadcast(bot, update, user_data):
     return MAKE_BROADCAST_CONFIRM
 
 
+@region_decorator
 @has_admin_rights
-def make_broadcast_confirm(bot, update, user_data):
+def make_broadcast_confirm(bot, update, user_data, region_id):
+    region = models.Region.get_by_id(region_id)
     broadcast_text = user_data['broadcast_text']
-    text = 'Вы уверены, что хотите отправить *всем пользователям вашего региона* следующее сообщение:\n\n%s' % broadcast_text
+    text = '*%s*\nВы уверены, что хотите отправить *всем пользователям вашего региона* следующее сообщение:\n\n%s' % (region.name, broadcast_text)
     keyboard = [[InlineKeyboardButton('Отправить', callback_data=YES),
                  InlineKeyboardButton('Отмена', callback_data=NO)]]
     send_message_text(bot, update, text, user_data=user_data,
