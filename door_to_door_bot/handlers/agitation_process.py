@@ -52,7 +52,10 @@ def team_decorator(func):
             # chat_data['team_id'] = team.id
         else:
             team_id = int(user_data['cur_team_id'])
-            team = models.AgitationTeam.objects.get(id=team_id)
+            team = models.AgitationTeam.objects.filter(id=team_id).first()
+            if not team:
+                del user_data['cur_team_id']
+                return
         return func(bot, update, user_data=user_data, team=team, *args, **kwargs)
 
     return wrapper
